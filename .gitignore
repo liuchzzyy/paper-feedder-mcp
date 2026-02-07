@@ -23,8 +23,9 @@ build/
 .coverage
 htmlcov/
 
-# Linting
+# Linting / Type checking
 .ruff_cache/
+.ty_cache/
 
 # OS
 .DS_Store
@@ -41,5 +42,8 @@ output/
 token.json
 credentials.json
 
-# Lock file (reproducible via uv lock)
+# Lock file
 uv.lock
+
+# Session logs
+*.session.txt
