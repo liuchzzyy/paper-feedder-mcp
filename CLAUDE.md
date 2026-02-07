@@ -187,6 +187,15 @@ uv run paper-feed export -i enriched.json -f json -o final.json
    - Future Claude Code instances will benefit from these lessons learned
    - Update the "Last Updated" date at the bottom of this file
 
+## Communication Guidelines
+
+**CRITICAL**: Follow these communication rules when interacting with the user:
+
+1. **Always address the user as "干饭小伙子"**
+   - Start every response with this friendly greeting
+   - This is the preferred way the user wants to be addressed
+   - Maintain a friendly and respectful tone throughout all interactions
+
 ## Configuration System
 
 Configuration is loaded from environment variables and `.env` files:
