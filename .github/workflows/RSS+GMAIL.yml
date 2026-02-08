@@ -50,16 +50,16 @@ jobs:
         shell: bash
         run: |
           KEYWORDS=$(uv run python - <<'PY'
-import asyncio
-from paper_feed.ai.keyword_generator import KeywordGenerator
+          import asyncio
+          from paper_feed.ai.keyword_generator import KeywordGenerator
 
-async def main():
-    kg = KeywordGenerator()
-    keywords = await kg.extract_keywords()
-    print(" ".join(keywords))
+          async def main():
+              kg = KeywordGenerator()
+              keywords = await kg.extract_keywords()
+              print(" ".join(keywords))
 
-asyncio.run(main())
-PY
+          asyncio.run(main())
+          PY
           )
           echo "KEYWORDS=$KEYWORDS" >> $GITHUB_ENV
 
