@@ -82,25 +82,41 @@ def get_openai_config() -> Dict[str, Any]:
 def get_gmail_config() -> Dict[str, Any]:
     """Get Gmail/EZGmail configuration.
 
-    Supports inline JSON mode for OAuth2 credentials only:
-    - GMAIL_TOKEN_JSON: OAuth2 token JSON string (required)
-    - GMAIL_CREDENTIALS_JSON: OAuth2 credentials JSON string (required)
+    Supports inline JSON or existing files for OAuth2 credentials:
+    - GMAIL_TOKEN_JSON: OAuth2 token JSON string (optional)
+    - GMAIL_CREDENTIALS_JSON: OAuth2 credentials JSON string (optional)
+    - GMAIL_TOKEN_FILE: token.json path (default: token.json)
+    - GMAIL_CREDENTIALS_FILE: credentials.json path (default: credentials.json)
 
-    The JSON values are written to fixed file paths (token.json /
-    credentials.json) before EZGmail initialization for compatibility.
+    Inline JSON values are written to the target file paths before
+    EZGmail initialization for compatibility.
 
     Returns:
-        Dict with token_json, credentials_json, query, max_results,
-        mark_as_read, processed_label, sender_filter settings.
+        Dict with token_json, credentials_json, token_file,
+        credentials_file, query, max_results, mark_as_read,
+        processed_label, sender_filter settings.
     """
     _ensure_dotenv()
     return {
         "token_json": os.environ.get("GMAIL_TOKEN_JSON"),
         "credentials_json": os.environ.get("GMAIL_CREDENTIALS_JSON"),
-        "query": os.environ.get("GMAIL_QUERY", "label:UNREAD"),
+        "token_file": os.environ.get("GMAIL_TOKEN_FILE", "feeds/token.json"),
+        "credentials_file": os.environ.get(
+            "GMAIL_CREDENTIALS_FILE", "feeds/credentials.json"
+        ),
+        "query": os.environ.get("GMAIL_QUERY"),
         "max_results": int(os.environ.get("GMAIL_MAX_RESULTS", "50")),
         "mark_as_read": os.environ.get("GMAIL_MARK_AS_READ", "false").lower()
         in ("true", "1", "yes"),
+        "trash_after_process": os.environ.get(
+            "GMAIL_TRASH_AFTER_PROCESS", "true"
+        ).lower()
+        in ("true", "1", "yes"),
+        "verify_trash_after_process": os.environ.get(
+            "GMAIL_VERIFY_TRASH_AFTER_PROCESS", "true"
+        ).lower()
+        in ("true", "1", "yes"),
+        "verify_trash_limit": int(os.environ.get("GMAIL_VERIFY_TRASH_LIMIT", "50")),
         "processed_label": os.environ.get("GMAIL_PROCESSED_LABEL"),
         "sender_filter": os.environ.get("GMAIL_SENDER_FILTER"),
     }

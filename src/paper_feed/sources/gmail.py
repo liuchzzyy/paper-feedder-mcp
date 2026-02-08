@@ -9,6 +9,7 @@ Requires the 'gmail' optional dependency: pip install paper-feed[gmail]
 
 import asyncio
 import base64
+import json
 import logging
 import re
 from datetime import date, datetime
@@ -117,6 +118,9 @@ class GmailSource(PaperSource):
         mark_as_read: Optional[bool] = None,
         auto_detect_source: bool = True,
         processed_label: Optional[str] = None,
+        trash_after_process: Optional[bool] = None,
+        verify_trash_after_process: Optional[bool] = None,
+        verify_trash_limit: Optional[int] = None,
     ):
         """Initialize Gmail source.
 
@@ -125,8 +129,9 @@ class GmailSource(PaperSource):
                 Examples:
                 - "from:scholaralerts-noreply@google.com"
                 - "subject:new articles"
-                - "label:UNREAD from:scholar"
-                Defaults to GMAIL_QUERY env var or "label:UNREAD".
+                - "in:inbox from:scholar"
+                Defaults to GMAIL_QUERY env var or an inbox-focused
+                query built from known alert senders.
             source_name: Source name for PaperItem objects.
             max_results: Maximum email threads to process.
                 Defaults to GMAIL_MAX_RESULTS env var or 50.
@@ -138,33 +143,44 @@ class GmailSource(PaperSource):
             processed_label: Optional Gmail label name to apply to processed
                 threads (e.g. "paper-feed/processed"). None = no labelling.
                 Defaults to GMAIL_PROCESSED_LABEL env var or None.
+            trash_after_process: Whether to move processed threads to Trash.
+                Defaults to GMAIL_TRASH_AFTER_PROCESS env var or True.
+            verify_trash_after_process: Whether to run a post-run verification
+                query against Trash to confirm processed threads were moved.
+                Defaults to GMAIL_VERIFY_TRASH_AFTER_PROCESS env var or True.
+            verify_trash_limit: Max threads to check when verifying Trash.
+                Defaults to GMAIL_VERIFY_TRASH_LIMIT env var or 50.
 
         Raises:
-            ValueError: If GMAIL_TOKEN_JSON or GMAIL_CREDENTIALS_JSON
-                environment variables are not set.
+            ValueError: If neither inline JSON nor credential files exist.
         """
         config = get_gmail_config()
 
-        # Validate that inline JSON credentials are provided
-        if not config.get("token_json"):
+        self.token_file = config.get("token_file", "feeds/token.json")
+        self.credentials_file = config.get("credentials_file", "feeds/credentials.json")
+
+        # Validate credentials: either inline JSON or existing files.
+        token_json = config.get("token_json")
+        credentials_json = config.get("credentials_json")
+        token_file_exists = Path(self.token_file).exists()
+        credentials_file_exists = Path(self.credentials_file).exists()
+
+        if not token_json and not token_file_exists:
             raise ValueError(
-                "GMAIL_TOKEN_JSON environment variable must be set. "
-                "This is required for OAuth2 authentication with Gmail."
+                "GMAIL_TOKEN_JSON is not set and token file not found. "
+                f"Expected token file at: {self.token_file}"
             )
-        if not config.get("credentials_json"):
+        if not credentials_json and not credentials_file_exists:
             raise ValueError(
-                "GMAIL_CREDENTIALS_JSON environment variable must be set. "
-                "This is required for OAuth2 authentication with Gmail."
+                "GMAIL_CREDENTIALS_JSON is not set and credentials file not found. "
+                f"Expected credentials file at: {self.credentials_file}"
             )
 
-        self.query = query or config.get("query", "label:UNREAD")
+        self.query = query or config.get("query") or self._default_query()
         self.source_name = source_name
         self.max_results = (
             max_results if max_results is not None else config.get("max_results", 50)
         )
-        # Fixed file paths for EZGmail compatibility
-        self.token_file = "token.json"
-        self.credentials_file = "credentials.json"
         self.mark_as_read = (
             mark_as_read
             if mark_as_read is not None
@@ -172,6 +188,21 @@ class GmailSource(PaperSource):
         )
         self.auto_detect_source = auto_detect_source
         self.processed_label = processed_label or config.get("processed_label")
+        self.trash_after_process = (
+            trash_after_process
+            if trash_after_process is not None
+            else config.get("trash_after_process", True)
+        )
+        self.verify_trash_after_process = (
+            verify_trash_after_process
+            if verify_trash_after_process is not None
+            else config.get("verify_trash_after_process", True)
+        )
+        self.verify_trash_limit = (
+            verify_trash_limit
+            if verify_trash_limit is not None
+            else config.get("verify_trash_limit", 50)
+        )
         self.parser = GmailParser()
         self._initialized = False
 
@@ -222,15 +253,77 @@ class GmailSource(PaperSource):
 
         token_json = config.get("token_json")
         if token_json and token_json.strip():
+            token_json = self._normalize_token_json(token_json.strip())
             token_path = Path(self.token_file)
+            token_path.parent.mkdir(parents=True, exist_ok=True)
             token_path.write_text(token_json.strip(), encoding="utf-8")
             logger.debug("Wrote GMAIL_TOKEN_JSON → %s", token_path)
 
         credentials_json = config.get("credentials_json")
         if credentials_json and credentials_json.strip():
             cred_path = Path(self.credentials_file)
+            cred_path.parent.mkdir(parents=True, exist_ok=True)
             cred_path.write_text(credentials_json.strip(), encoding="utf-8")
             logger.debug("Wrote GMAIL_CREDENTIALS_JSON → %s", cred_path)
+
+    @staticmethod
+    def _normalize_token_json(token_json: str) -> str:
+        """Normalize token JSON for oauth2client/EZGmail compatibility.
+
+        EZGmail uses oauth2client which expects token.json created by
+        oauth2client Credentials.to_json(), containing _module/_class
+        and OAuth2Credentials fields. This method converts modern
+        authorized-user token JSON (with 'token'/'expiry') into the
+        expected format without changing the .env content.
+        """
+        try:
+            data = json.loads(token_json)
+        except json.JSONDecodeError:
+            logger.warning("GMAIL_TOKEN_JSON is not valid JSON; using as-is.")
+            return token_json
+
+        # If token JSON already matches oauth2client format, keep it.
+        if isinstance(data, dict) and data.get("_module") and data.get("_class"):
+            return token_json
+
+        # Map common fields from modern token JSON.
+        access_token = data.get("access_token") or data.get("token")
+        if not access_token:
+            logger.warning(
+                "GMAIL_TOKEN_JSON missing access token; using as-is."
+            )
+            return token_json
+
+        token_expiry = data.get("token_expiry") or data.get("expiry")
+
+        normalized = {
+            "access_token": access_token,
+            "client_id": data.get("client_id"),
+            "client_secret": data.get("client_secret"),
+            "refresh_token": data.get("refresh_token"),
+            "token_expiry": token_expiry,
+            "token_uri": data.get("token_uri"),
+            "user_agent": "paper-feed/1.0",
+            "revoke_uri": data.get("revoke_uri"),
+            "id_token": data.get("id_token"),
+            "token_response": data.get("token_response"),
+            "scopes": data.get("scopes"),
+            "token_info_uri": data.get("token_info_uri"),
+            "invalid": bool(data.get("invalid", False)),
+            "_module": "oauth2client.client",
+            "_class": "OAuth2Credentials",
+        }
+
+        return json.dumps(normalized, ensure_ascii=False)
+
+    @staticmethod
+    def _default_query() -> str:
+        """Build default Gmail query for inbox alerts and TOC emails."""
+        senders = sorted(_SENDER_SOURCE_MAP.keys())
+        if not senders:
+            return "in:inbox"
+        sender_query = " OR ".join(f"from:{addr}" for addr in senders)
+        return f"in:inbox ({sender_query})"
 
     async def fetch_papers(
         self, limit: Optional[int] = None, since: Optional[date] = None
@@ -316,16 +409,6 @@ class GmailSource(PaperSource):
                                 message, effective_source
                             )
 
-                        # Enrich items with attachment info (PDF discovery)
-                        attachment_urls = self._extract_attachment_info(message)
-                        if attachment_urls:
-                            for item in items:
-                                if not item.pdf_url and attachment_urls:
-                                    item.pdf_url = attachment_urls[0]
-                                # Store all attachment info in metadata
-                                if "attachments" not in item.extra:
-                                    item.extra["attachments"] = attachment_urls
-
                         papers.extend(items)
 
                         # Apply limit
@@ -349,6 +432,15 @@ class GmailSource(PaperSource):
                             logger.warning(
                                 f"Failed to apply label "
                                 f"'{self.processed_label}': {label_err}"
+                            )
+
+                    # Move to Trash if configured
+                    if self.trash_after_process:
+                        try:
+                            await asyncio.to_thread(thread.trash)
+                        except Exception as trash_err:
+                            logger.warning(
+                                f"Failed to trash thread {thread.id}: {trash_err}"
                             )
 
                 except Exception as e:
@@ -381,6 +473,23 @@ class GmailSource(PaperSource):
                 f"{len(threads)} email threads"
             )
 
+            if self.verify_trash_after_process:
+                try:
+                    verify_query = self._build_trash_query(self.query)
+                    verify_threads: list = await asyncio.to_thread(
+                        ezgmail.search, verify_query, self.verify_trash_limit
+                    )
+                    logger.info(
+                        "Trash verification: %d threads matched query: %s",
+                        len(verify_threads),
+                        verify_query,
+                    )
+                except Exception as verify_err:
+                    logger.warning(
+                        "Trash verification failed: %s",
+                        verify_err,
+                    )
+
         except ImportError:
             raise
         except Exception as e:
@@ -390,6 +499,15 @@ class GmailSource(PaperSource):
             )
 
         return papers
+
+    @staticmethod
+    def _build_trash_query(query: str) -> str:
+        """Create a Trash verification query from the base query."""
+        if "in:trash" in query:
+            return query
+        if "in:inbox" in query:
+            return query.replace("in:inbox", "in:trash")
+        return f"in:trash {query}".strip()
 
     @staticmethod
     def _detect_source_from_sender(message: object) -> Optional[str]:

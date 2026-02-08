@@ -5,7 +5,7 @@ A modular Python framework for collecting, filtering, and exporting academic pap
 ## Features
 
 - **RSS Feed Source** — Reads feeds from OPML files (Nature, Science, ACS, Wiley, RSC, Elsevier, etc.). Concurrent fetching with deduplication and auto source-name detection.
-- **Gmail Source** — Fetches Google Scholar alerts and journal TOC emails via EZGmail. Inline OAuth2 JSON credentials (env-only deployment).
+- **Gmail Source** — Fetches Google Scholar alerts and journal TOC emails via EZGmail. Supports existing token/credentials files or inline OAuth2 JSON. Can auto-trash processed threads.
 - **Two-Stage Filtering** — Keyword OR first-pass (broad) + AI semantic second-pass (precise, via DeepSeek/OpenAI-compatible API).
 - **Metadata Enrichment** — CrossRef and OpenAlex API clients for DOI lookup, author/date/abstract completion.
 - **Export Adapters** — JSON file export with metadata. Zotero API export (optional dependency).
@@ -86,8 +86,13 @@ Key settings:
 | `OPENAI_API_KEY` | API key for AI filtering (DeepSeek/OpenAI-compatible) |
 | `OPENAI_BASE_URL` | Custom API base URL (e.g. `https://api.deepseek.com/v1`) |
 | `RESEARCH_PROMPT` | Natural language research interests for AI filtering |
-| `GMAIL_TOKEN_JSON` | Gmail OAuth2 token (inline JSON, required for Gmail source) |
-| `GMAIL_CREDENTIALS_JSON` | Gmail OAuth2 credentials (inline JSON, required for Gmail source) |
+| `GMAIL_TOKEN_JSON` | Gmail OAuth2 token (inline JSON, optional if token file exists) |
+| `GMAIL_CREDENTIALS_JSON` | Gmail OAuth2 credentials (inline JSON, optional if credentials file exists) |
+| `GMAIL_TOKEN_FILE` | Path to token file (default: `feeds/token.json`) |
+| `GMAIL_CREDENTIALS_FILE` | Path to credentials file (default: `feeds/credentials.json`) |
+| `GMAIL_TRASH_AFTER_PROCESS` | Move processed threads to Trash (default: `true`) |
+| `GMAIL_VERIFY_TRASH_AFTER_PROCESS` | Verify Trash after processing (default: `true`) |
+| `GMAIL_VERIFY_TRASH_LIMIT` | Max threads checked during Trash verification (default: `50`) |
 | `POLITE_POOL_EMAIL` | Email for CrossRef/OpenAlex polite pool access |
 | `PAPER_FEED_OPML` | Path to OPML file with RSS feeds |
 

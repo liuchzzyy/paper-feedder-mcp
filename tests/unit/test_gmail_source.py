@@ -178,6 +178,7 @@ async def test_gmail_source_fetch_papers():
     mock_thread.id = "thread_001"
     mock_thread.messages = [mock_message]
     mock_thread.markAsRead = MagicMock()
+    mock_thread.trash = MagicMock()
 
     # Patch ezgmail in sys.modules so 'import ezgmail' inside fetch_papers resolves to mock
     mock_ezgmail = MagicMock()
@@ -219,6 +220,7 @@ async def test_gmail_source_fetch_papers_with_limit():
     mock_thread = MagicMock()
     mock_thread.id = "thread_001"
     mock_thread.messages = messages
+    mock_thread.trash = MagicMock()
 
     mock_ezgmail = MagicMock()
     mock_ezgmail.search.return_value = [mock_thread]
@@ -262,6 +264,7 @@ async def test_gmail_source_fetch_papers_date_filter():
     mock_thread = MagicMock()
     mock_thread.id = "thread_001"
     mock_thread.messages = [old_msg, new_msg]
+    mock_thread.trash = MagicMock()
 
     mock_ezgmail = MagicMock()
     mock_ezgmail.search.return_value = [mock_thread]
@@ -307,6 +310,7 @@ async def test_gmail_source_mark_as_read():
     mock_thread = MagicMock()
     mock_thread.id = "thread_001"
     mock_thread.messages = [mock_message]
+    mock_thread.trash = MagicMock()
 
     mock_ezgmail = MagicMock()
     mock_ezgmail.search.return_value = [mock_thread]
@@ -344,6 +348,7 @@ async def test_gmail_source_deduplication():
     mock_thread = MagicMock()
     mock_thread.id = "thread_001"
     mock_thread.messages = messages
+    mock_thread.trash = MagicMock()
 
     mock_ezgmail = MagicMock()
     mock_ezgmail.search.return_value = [mock_thread]
@@ -493,6 +498,9 @@ class TestGmailSourceInitNewParams:
         source = GmailSource(query="test")
         assert source.auto_detect_source is True
         assert source.processed_label is None
+        assert source.trash_after_process is True
+        assert source.verify_trash_after_process is True
+        assert source.verify_trash_limit == 50
 
     def test_init_custom_new_params(self):
         """New params accept custom values."""
@@ -500,9 +508,15 @@ class TestGmailSourceInitNewParams:
             query="test",
             auto_detect_source=False,
             processed_label="paper-feed/done",
+            trash_after_process=False,
+            verify_trash_after_process=False,
+            verify_trash_limit=10,
         )
         assert source.auto_detect_source is False
         assert source.processed_label == "paper-feed/done"
+        assert source.trash_after_process is False
+        assert source.verify_trash_after_process is False
+        assert source.verify_trash_limit == 10
 
 
 # ── GmailSource auto-detect integration tests ──────────────────────
@@ -532,6 +546,7 @@ async def test_fetch_papers_auto_detect_source():
     mock_thread.id = "thread_ad_1"
     mock_thread.messages = [mock_message]
     mock_thread.snippet = "Nature articles"
+    mock_thread.trash = MagicMock()
 
     mock_ezgmail = MagicMock()
     mock_ezgmail.search.return_value = [mock_thread]
@@ -574,6 +589,7 @@ async def test_fetch_papers_applies_processed_label():
     mock_thread.id = "thread_pl_1"
     mock_thread.messages = [mock_message]
     mock_thread.snippet = "test"
+    mock_thread.trash = MagicMock()
 
     mock_ezgmail = MagicMock()
     mock_ezgmail.search.return_value = [mock_thread]

@@ -96,7 +96,7 @@ async def _handle_fetch(args: argparse.Namespace) -> None:
     elif args.source == "gmail":
         from paper_feed.sources.gmail import GmailSource
 
-        query = args.query or "is:unread"
+        query = args.query
         source = GmailSource(query=query)
         papers = await source.fetch_papers(limit=args.limit, since=since)
     else:
