@@ -56,7 +56,7 @@ uv run ty check
 3. All I/O is async; use `asyncio.to_thread()` for sync libraries.
 4. Optional dependencies must be guarded with `try/except ImportError`.
 5. MCP tools should return JSON-serializable outputs.
-6. After successful Zotero export, CLI cleans `output/` and common intermediate files.
+6. Use `paper-feedder-mcp delete` to clean `output/` and common intermediate files when needed.
 
 ## Configuration (selected)
 
@@ -76,6 +76,7 @@ uv run ty check
 - Do not commit sensitive files (tokens/credentials).
 - Keep documentation (`README.md`, `doc/中文指南.md`) in sync with code changes.
 - Use `paper-feedder-mcp delete` to clean pipeline outputs when needed.
+- `enrich` accepts `--api/--source/--provider` and `--jobs/--concurrency/--parallel`.
 
 ---
 

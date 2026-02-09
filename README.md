@@ -82,7 +82,7 @@ paper-feedder-mcp filter --input output/filtered.json --output output/ai_filtere
     --keywords battery zinc
 
 # 4. Enrich with CrossRef + OpenAlex metadata
-paper-feedder-mcp enrich --input output/ai_filtered.json --output output/enriched.json --source all
+paper-feedder-mcp enrich --input output/ai_filtered.json --output output/enriched.json --api all --concurrency 5
 
 # 5. Export (metadata included by default)
 paper-feedder-mcp export --input output/enriched.json --output output/final.json --format json
@@ -95,7 +95,7 @@ Notes:
 - Use `paper-feedder-mcp delete` to clean `output/` and common intermediate files when needed.
 - Use `--no-ai` to disable AI filtering; use `--no-metadata` to omit extra fields in export.
 - If `--keywords` is omitted, keywords will be auto-generated from `RESEARCH_PROMPT` using the AI keyword generator.
-- If OpenAlex returns `429`, set `OPENALEX_API_KEY` and lower `OPENALEX_MAX_REQUESTS_PER_SECOND`.
+- If OpenAlex returns `429`, set `OPENALEX_API_KEY`, lower `OPENALEX_MAX_REQUESTS_PER_SECOND`, and consider reducing `--concurrency`.
 
 ### Python API
 
@@ -169,6 +169,7 @@ paper-feedder-mcp/
 │   └── utils/              # Text helpers and errors
 ├── tests/unit/
 ├── feeds/
+├── doc/               # Documentation (中文指南.md)
 └── pyproject.toml
 ```
 
