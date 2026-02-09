@@ -109,6 +109,7 @@ class TestBuildParser:
         assert hasattr(args, "output")
         assert args.output == "out.json"
         assert args.source == "rss"  # default
+        assert args.since is not None
 
     def test_fetch_parser_accepts_optional_args(self):
         """Test fetch parser accepts optional arguments."""
@@ -170,7 +171,7 @@ class TestBuildParser:
                 "--min-date",
                 "2024-01-01",
                 "--has-pdf",
-                "--ai",
+                "--no-ai",
             ]
         )
 
@@ -179,7 +180,7 @@ class TestBuildParser:
         assert args.authors == ["Author"]
         assert args.min_date == "2024-01-01"
         assert args.has_pdf is True
-        assert args.ai is True
+        assert args.ai is False
 
     def test_export_parser_has_required_args(self):
         """Test export subcommand requires input and output."""
@@ -197,6 +198,7 @@ class TestBuildParser:
         assert args.input == "in.json"
         assert args.output == "out.json"
         assert args.format == "json"  # default
+        assert args.include_metadata is True
 
     def test_export_parser_accepts_format_options(self):
         """Test export parser accepts different formats."""
@@ -212,12 +214,12 @@ class TestBuildParser:
                     "out.json",
                     "--format",
                     fmt,
-                    "--include-metadata",
+                    "--no-metadata",
                 ]
             )
 
             assert args.format == fmt
-            assert args.include_metadata is True
+            assert args.include_metadata is False
 
     def test_enrich_parser_has_required_args(self):
         """Test enrich subcommand requires input and output."""
@@ -522,6 +524,45 @@ class TestHandleFilter:
     """Tests for _handle_filter handler."""
 
     @pytest.mark.asyncio
+    async def test_handle_filter_autogenerates_keywords(
+        self, sample_papers_json, tmp_path
+    ):
+        """Test filter handler auto-generates keywords when missing."""
+        output_file = tmp_path / "filtered.json"
+
+        args = argparse.Namespace(
+            input=str(sample_papers_json),
+            output=str(output_file),
+            keywords=None,
+            exclude=None,
+            authors=None,
+            min_date=None,
+            has_pdf=False,
+            ai=True,
+        )
+
+        with patch(
+            "src.ai.keyword_generator.KeywordGenerator.extract_keywords",
+            new=AsyncMock(return_value=["auto", "keyword"]),
+        ):
+            with patch("src.filters.pipeline.FilterPipeline") as mock_pipeline_class:
+                mock_pipeline = AsyncMock()
+                result = FilterResult(
+                    papers=[],
+                    total_count=2,
+                    passed_count=0,
+                    rejected_count=2,
+                )
+                mock_pipeline.filter.return_value = result
+                mock_pipeline_class.return_value = mock_pipeline
+
+                await _handle_filter(args)
+
+                call_args = mock_pipeline.filter.call_args
+                criteria = call_args[0][1]
+                assert criteria.keywords == ["auto", "keyword"]
+
+    @pytest.mark.asyncio
     async def test_handle_filter_with_keywords(
         self, sample_papers_json, tmp_path, capsys
     ):
@@ -536,7 +577,7 @@ class TestHandleFilter:
             authors=None,
             min_date=None,
             has_pdf=False,
-            ai=False,
+            ai=True,
         )
 
         with patch("src.filters.pipeline.FilterPipeline") as mock_pipeline_class:
@@ -565,12 +606,12 @@ class TestHandleFilter:
         args = argparse.Namespace(
             input=str(sample_papers_json),
             output=str(output_file),
-            keywords=None,
+            keywords=["test"],
             exclude=None,
             authors=None,
             min_date="2024-01-01",
             has_pdf=False,
-            ai=False,
+            ai=True,
         )
 
         with patch("src.filters.pipeline.FilterPipeline") as mock_pipeline_class:
@@ -604,7 +645,7 @@ class TestHandleFilter:
             authors=["Author"],
             min_date="2024-01-01",
             has_pdf=True,
-            ai=False,
+            ai=True,
         )
 
         with patch("src.filters.pipeline.FilterPipeline") as mock_pipeline_class:
@@ -639,7 +680,7 @@ class TestHandleFilter:
         args = argparse.Namespace(
             input=str(sample_papers_json),
             output=str(output_file),
-            keywords=None,
+            keywords=["test"],
             exclude=None,
             authors=None,
             min_date=None,

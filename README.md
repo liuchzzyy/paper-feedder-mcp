@@ -70,22 +70,22 @@ On errors:
 ### CLI Pipeline
 
 ```bash
-# 1. Fetch papers from RSS feeds
+# 1. Fetch papers from RSS feeds (default --since: last 15 days)
 paper-feedder-mcp fetch --source rss --limit 200 --output output/raw.json
 
 # 2. Keyword filter (OR logic)
 paper-feedder-mcp filter --input output/raw.json --output output/filtered.json \
     --keywords battery zinc electrolyte operando
 
-# 3. AI semantic filter (requires OPENAI_API_KEY in .env)
+# 3. AI semantic filter (default enabled; requires OPENAI_API_KEY in .env)
 paper-feedder-mcp filter --input output/filtered.json --output output/ai_filtered.json \
-    --keywords battery zinc --ai
+    --keywords battery zinc
 
 # 4. Enrich with CrossRef + OpenAlex metadata
 paper-feedder-mcp enrich --input output/ai_filtered.json --output output/enriched.json --source all
 
-# 5. Export
-paper-feedder-mcp export --input output/enriched.json --output output/final.json --format json --include-metadata
+# 5. Export (metadata included by default)
+paper-feedder-mcp export --input output/enriched.json --output output/final.json --format json
 
 # 6. Optional cleanup
 paper-feedder-mcp delete
@@ -93,6 +93,8 @@ paper-feedder-mcp delete
 
 Notes:
 - `paper-feedder-mcp export --format zotero` will automatically delete `output/` and common intermediate files after a successful export.
+- Use `--no-ai` to disable AI filtering; use `--no-metadata` to omit extra fields in export.
+- If `--keywords` is omitted, keywords will be auto-generated from `RESEARCH_PROMPT` using the AI keyword generator.
 
 ### Python API
 

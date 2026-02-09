@@ -5,7 +5,7 @@ import asyncio
 import json
 import logging
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 import shutil
 from typing import List
@@ -95,8 +95,25 @@ async def _handle_filter(args: argparse.Namespace) -> None:
     if args.min_date:
         min_date = date.fromisoformat(args.min_date)
 
+    keywords = args.keywords or []
+    if not keywords:
+        from src.ai.keyword_generator import KeywordGenerator
+
+        try:
+            keywords = await KeywordGenerator().extract_keywords()
+            if keywords:
+                print(
+                    f"Auto-generated keywords from RESEARCH_PROMPT: {keywords}"
+                )
+        except Exception as exc:
+            print(
+                f"Error: failed to generate keywords from RESEARCH_PROMPT: {exc}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
     criteria = FilterCriteria(
-        keywords=args.keywords or [],
+        keywords=keywords,
         exclude_keywords=args.exclude or [],
         authors=args.authors or [],
         min_date=min_date,
@@ -117,7 +134,7 @@ async def _handle_filter(args: argparse.Namespace) -> None:
             llm_client = OpenAI(**kwargs)
         else:
             print(
-                "Warning: --ai requested but OPENAI_API_KEY not set. "
+                "Warning: AI filtering enabled but OPENAI_API_KEY not set. "
                 "Skipping AI filter.",
                 file=sys.stderr,
             )
@@ -252,40 +269,41 @@ async def _handle_delete(_args: argparse.Namespace) -> None:
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    default_since = (date.today() - timedelta(days=15)).isoformat()
     parser = argparse.ArgumentParser(
         prog="paper-feedder-mcp",
-        description="Collect, filter, enrich, and serve papers via MCP.",
+        description="收集、过滤、补充并导出论文（MCP）。",
     )
     subparsers = parser.add_subparsers(
-        dest="command", help="Available commands"
+        dest="command", help="可用子命令"
     )
 
     subparsers.add_parser(
-        "serve", help="Run MCP server over stdio (default)"
+        "serve", help="启动 MCP stdio 服务器（默认）"
     )
 
     fetch_parser = subparsers.add_parser(
-        "fetch", help="Fetch papers from a source"
+        "fetch", help="从数据源抓取论文"
     )
     fetch_parser.add_argument(
         "-s",
         "--source",
         choices=["rss", "gmail"],
         default="rss",
-        help="Data source (default: rss)",
+        help="数据源（默认：rss）",
     )
     fetch_parser.add_argument(
         "--opml",
         "--rss-feeds",
         dest="opml",
-        help="OPML file path (for RSS source)",
+        help="OPML 文件路径（RSS 源）",
     )
     fetch_parser.add_argument(
         "-q",
         "--query",
         "--gmail-query",
         dest="query",
-        help="Gmail search query (for Gmail source)",
+        help="Gmail 搜索查询（Gmail 源）",
     )
     fetch_parser.add_argument(
         "-n",
@@ -293,41 +311,42 @@ def _build_parser() -> argparse.ArgumentParser:
         "--max-papers",
         dest="limit",
         type=int,
-        help="Maximum number of papers to fetch",
+        help="最大抓取数量",
     )
     fetch_parser.add_argument(
         "--since",
         "--from-date",
         dest="since",
-        help="Only fetch papers since date (YYYY-MM-DD)",
+        default=default_since,
+        help="仅抓取自此日期之后（YYYY-MM-DD，默认近15天）",
     )
     fetch_parser.add_argument(
         "-o",
         "--output",
         required=True,
-        help="Output JSON file path",
+        help="输出 JSON 文件路径",
     )
 
     filter_parser = subparsers.add_parser(
-        "filter", help="Filter papers by criteria"
+        "filter", help="按条件过滤论文"
     )
     filter_parser.add_argument(
         "-i",
         "--input",
         required=True,
-        help="Input JSON file with papers",
+        help="输入 JSON 文件",
     )
     filter_parser.add_argument(
         "-o",
         "--output",
         required=True,
-        help="Output JSON file path",
+        help="输出 JSON 文件路径",
     )
     filter_parser.add_argument(
         "-k",
         "--keywords",
         nargs="+",
-        help="Required keywords (OR logic, first-pass filter)",
+        help="关键词（OR 逻辑；未提供则用 RESEARCH_PROMPT 自动生成）",
     )
     filter_parser.add_argument(
         "-x",
@@ -335,20 +354,20 @@ def _build_parser() -> argparse.ArgumentParser:
         "--exclude-keywords",
         dest="exclude",
         nargs="+",
-        help="Exclude keywords (NOT logic)",
+        help="排除关键词（NOT 逻辑）",
     )
     filter_parser.add_argument(
         "-a",
         "--authors",
         nargs="+",
-        help="Author filter (OR logic)",
+        help="作者过滤（OR 逻辑）",
     )
     filter_parser.add_argument(
         "--min-date",
         "--after",
         "--from",
         dest="min_date",
-        help="Minimum publication date (YYYY-MM-DD)",
+        help="最早发布日期（YYYY-MM-DD）",
     )
     filter_parser.add_argument(
         "--pdf",
@@ -356,64 +375,80 @@ def _build_parser() -> argparse.ArgumentParser:
         "--require-pdf",
         dest="has_pdf",
         action="store_true",
-        help="Require PDF availability",
+        help="仅保留有 PDF 的论文",
     )
-    filter_parser.add_argument(
+    ai_group = filter_parser.add_mutually_exclusive_group()
+    ai_group.add_argument(
         "--ai",
         "--semantic",
         "--use-ai",
         dest="ai",
         action="store_true",
-        help="Enable AI-powered relevance filtering",
+        default=True,
+        help="启用 AI 语义过滤（默认开启）",
+    )
+    ai_group.add_argument(
+        "--no-ai",
+        dest="ai",
+        action="store_false",
+        help="禁用 AI 语义过滤",
     )
 
     export_parser = subparsers.add_parser(
-        "export", help="Export papers to a format"
+        "export", help="导出论文到指定格式"
     )
     export_parser.add_argument(
         "-i",
         "--input",
         required=True,
-        help="Input JSON file with papers",
+        help="输入 JSON 文件",
     )
     export_parser.add_argument(
         "-f",
         "--format",
         choices=["json", "zotero"],
         default="json",
-        help="Export format (default: json)",
+        help="导出格式（默认：json）",
     )
     export_parser.add_argument(
         "-o",
         "--output",
         required=True,
-        help="Output file path",
+        help="输出文件路径",
     )
-    export_parser.add_argument(
+    metadata_group = export_parser.add_mutually_exclusive_group()
+    metadata_group.add_argument(
         "-m",
         "--metadata",
         "--include-metadata",
         "--with-metadata",
         dest="include_metadata",
         action="store_true",
-        help="Include metadata in export",
+        default=True,
+        help="包含扩展字段（默认开启）",
+    )
+    metadata_group.add_argument(
+        "--no-metadata",
+        dest="include_metadata",
+        action="store_false",
+        help="导出时去除扩展字段",
     )
 
     enrich_parser = subparsers.add_parser(
         "enrich",
-        help="Enrich papers with CrossRef/OpenAlex metadata",
+        help="使用 CrossRef/OpenAlex 补充元数据",
     )
     enrich_parser.add_argument(
         "-i",
         "--input",
         required=True,
-        help="Input JSON file with papers",
+        help="输入 JSON 文件",
     )
     enrich_parser.add_argument(
         "-o",
         "--output",
         required=True,
-        help="Output JSON file path",
+        help="输出 JSON 文件路径",
     )
     enrich_parser.add_argument(
         "--api",
@@ -422,7 +457,7 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="source",
         choices=["crossref", "openalex", "all"],
         default="all",
-        help="Enrichment API provider (default: all)",
+        help="补充来源（默认：all）",
     )
     enrich_parser.add_argument(
         "-j",
@@ -432,12 +467,12 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="concurrency",
         type=int,
         default=5,
-        help="Max concurrent API requests (default: 5)",
+        help="最大并发数（默认：5）",
     )
 
     subparsers.add_parser(
         "delete",
-        help="Delete output/ directory",
+        help="删除 output/ 目录及中间文件",
     )
 
     return parser
