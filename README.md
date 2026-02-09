@@ -1,26 +1,26 @@
-# paper-feed
+# paper-feedder-mcp
 
-A modular Python framework for collecting, filtering, and exporting academic papers from RSS feeds and Gmail email alerts.
+An MCP (Model Context Protocol) server for collecting, filtering, enriching, and exporting academic papers from RSS feeds and Gmail alerts.
 
 ## Features
 
-- **RSS Feed Source** — Reads feeds from OPML files (Nature, Science, ACS, Wiley, RSC, Elsevier, etc.). Concurrent fetching with deduplication and auto source-name detection.
-- **Gmail Source** — Fetches Google Scholar alerts and journal TOC emails via EZGmail. Supports existing token/credentials files or inline OAuth2 JSON. Can auto-trash processed threads.
-- **Two-Stage Filtering** — Keyword OR first-pass (broad) + AI semantic second-pass (precise, via DeepSeek/OpenAI-compatible API).
-- **Metadata Enrichment** — CrossRef and OpenAlex API clients for DOI lookup, author/date/abstract completion.
-- **Export Adapters** — JSON file export with metadata. Zotero API export (optional dependency).
-- **CLI** — `paper-feed fetch | filter | enrich | export` pipeline commands.
+- MCP server with tools for fetch, filter, enrich, export, and keyword generation
+- RSS feed ingestion with OPML support, concurrency, and deduplication
+- Gmail alert ingestion via EZGmail (optional)
+- Two-stage filtering: keyword pass + optional AI semantic pass
+- Metadata enrichment via CrossRef and OpenAlex
+- Export adapters for JSON and Zotero (via local `zotero-mcp` repo)
+- CLI utilities for direct operations
 
 ## Requirements
 
-- Python 3.10+
-- [uv](https://docs.astral.sh/uv/) (package manager)
+- Python 3.12+
+- uv (package manager)
 
 ## Installation
 
 ```bash
-# Clone and install
-cd paper-feed
+cd paper-feedder-mcp
 uv sync
 
 # With development tools (pytest, ruff, ty)
@@ -29,44 +29,88 @@ uv sync --group dev
 
 ## Quick Start
 
+### MCP Server (stdio)
+
+```bash
+# Default: serve over stdio
+paper-feedder-mcp
+
+# Explicit serve
+paper-feedder-mcp serve
+
+# Or via module
+python -m src
+```
+
+### MCP Tool Output
+
+All MCP tools return JSON in a consistent envelope:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "...": "..."
+  },
+  "meta": {
+    "...": "..."
+  }
+}
+```
+
+On errors:
+
+```json
+{
+  "ok": false,
+  "error": "ErrorType: message"
+}
+```
+
 ### CLI Pipeline
 
 ```bash
 # 1. Fetch papers from RSS feeds
-paper-feed fetch --source rss --limit 200 --output raw.json
+paper-feedder-mcp fetch --source rss --limit 200 --output output/raw.json
 
-# 2. Keyword filter (OR logic — any match passes)
-paper-feed filter --input raw.json --output filtered.json \
+# 2. Keyword filter (OR logic)
+paper-feedder-mcp filter --input output/raw.json --output output/filtered.json \
     --keywords battery zinc electrolyte operando
 
 # 3. AI semantic filter (requires OPENAI_API_KEY in .env)
-paper-feed filter --input filtered.json --output ai_filtered.json \
+paper-feedder-mcp filter --input output/filtered.json --output output/ai_filtered.json \
     --keywords battery zinc --ai
 
 # 4. Enrich with CrossRef + OpenAlex metadata
-paper-feed enrich --input ai_filtered.json --output enriched.json --source all
+paper-feedder-mcp enrich --input output/ai_filtered.json --output output/enriched.json --source all
 
 # 5. Export
-paper-feed export --input enriched.json --output final.json --format json --include-metadata
+paper-feedder-mcp export --input output/enriched.json --output output/final.json --format json --include-metadata
+
+# 6. Optional cleanup
+paper-feedder-mcp delete
 ```
+
+Notes:
+- `paper-feedder-mcp export --format zotero` will automatically delete `output/` and common intermediate files after a successful export.
 
 ### Python API
 
 ```python
 import asyncio
-from paper_feed import RSSSource, FilterPipeline, JSONAdapter, FilterCriteria
+from src.sources import RSSSource
+from src.filters import FilterPipeline
+from src.adapters import JSONAdapter
+from src.models.responses import FilterCriteria
 
 async def main():
-    # Fetch
     source = RSSSource("feeds/RSS_official.opml")
     papers = await source.fetch_papers(limit=50)
 
-    # Filter (keywords use OR logic)
     criteria = FilterCriteria(keywords=["battery", "electrode"])
     result = await FilterPipeline().filter(papers, criteria)
 
-    # Export
-    await JSONAdapter().export(result.papers, "papers.json", include_metadata=True)
+    await JSONAdapter().export(result.papers, "output/papers.json", include_metadata=True)
 
 asyncio.run(main())
 ```
@@ -83,11 +127,11 @@ Key settings:
 
 | Variable | Description |
 |----------|-------------|
-| `OPENAI_API_KEY` | API key for AI filtering (DeepSeek/OpenAI-compatible) |
-| `OPENAI_BASE_URL` | Custom API base URL (e.g. `https://api.deepseek.com/v1`) |
-| `RESEARCH_PROMPT` | Natural language research interests for AI filtering |
-| `GMAIL_TOKEN_JSON` | Gmail OAuth2 token (inline JSON, optional if token file exists) |
-| `GMAIL_CREDENTIALS_JSON` | Gmail OAuth2 credentials (inline JSON, optional if credentials file exists) |
+| `OPENAI_API_KEY` | API key for AI filtering (OpenAI-compatible) |
+| `OPENAI_BASE_URL` | Custom API base URL |
+| `RESEARCH_PROMPT` | Research interests for AI filtering |
+| `GMAIL_TOKEN_JSON` | Gmail OAuth2 token (inline JSON) |
+| `GMAIL_CREDENTIALS_JSON` | Gmail OAuth2 credentials (inline JSON) |
 | `GMAIL_TOKEN_FILE` | Path to token file (default: `feeds/token.json`) |
 | `GMAIL_CREDENTIALS_FILE` | Path to credentials file (default: `feeds/credentials.json`) |
 | `GMAIL_TRASH_AFTER_PROCESS` | Move processed threads to Trash (default: `true`) |
@@ -96,24 +140,31 @@ Key settings:
 | `GMAIL_SENDER_FILTER` | Comma-separated sender allowlist for Gmail filtering |
 | `GMAIL_SENDER_MAP_JSON` | JSON map of sender email to source name |
 | `POLITE_POOL_EMAIL` | Email for CrossRef/OpenAlex polite pool access |
-| `PAPER_FEED_OPML` | Path to OPML file with RSS feeds |
+| `PAPER_FEEDDER_MCP_OPML` | Path to OPML file with RSS feeds |
+| `PAPER_FEEDDER_MCP_USER_AGENT` | Shared User-Agent for RSS/CrossRef/OpenAlex |
+| `ZOTERO_MCP_PATH` | Path to `zotero-mcp/src` (if not at default location) |
 
 See `.env.example` for all available options.
 
 ## Project Structure
 
 ```
-paper-feed/
-├── src/paper_feed/
-│   ├── core/           # Models, base classes, CLI, config
-│   ├── sources/        # RSS, Gmail, CrossRef, OpenAlex
-│   ├── filters/        # Keyword filter + AI filter pipeline
-│   ├── ai/             # Keyword generator + AI filter stage
-│   ├── adapters/       # JSON, Zotero export
-│   └── utils/          # Text cleaning, DOI regex
-├── tests/unit/         # 350 tests (pytest + pytest-asyncio)
-├── feeds/              # Default OPML file
-└── pyproject.toml      # Project configuration
+paper-feedder-mcp/
+├── src/
+│   ├── server.py           # MCP server
+│   ├── client/cli.py       # CLI entry
+│   ├── config/             # Pydantic settings
+│   ├── handlers/           # MCP tool/prompt handlers
+│   ├── models/             # Schemas and data models
+│   ├── services/           # Fetch/filter/enrich/export services
+│   ├── sources/            # RSS, Gmail, CrossRef, OpenAlex
+│   ├── filters/            # Keyword and AI filters
+│   ├── adapters/           # JSON, Zotero export
+│   ├── ai/                 # Keyword generator
+│   └── utils/              # Text helpers and errors
+├── tests/unit/
+├── feeds/
+└── pyproject.toml
 ```
 
 ## Development
@@ -123,7 +174,7 @@ paper-feed/
 uv run pytest
 
 # Lint
-uv run ruff check
+uv run ruff check .
 
 # Type check
 uv run ty check

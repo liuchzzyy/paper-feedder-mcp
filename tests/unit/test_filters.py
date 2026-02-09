@@ -2,8 +2,8 @@
 
 import pytest
 from datetime import date
-from paper_feed.core.models import PaperItem, FilterCriteria
-from paper_feed.filters import FilterPipeline
+from src.models.responses import PaperItem, FilterCriteria
+from src.filters import FilterPipeline
 
 
 @pytest.fixture

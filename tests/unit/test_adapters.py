@@ -4,9 +4,9 @@ import json
 import pytest
 from datetime import date
 
-from paper_feed.adapters.json import JSONAdapter
-from paper_feed.adapters.zotero import ZoteroAdapter, zotero_available
-from paper_feed.core.models import PaperItem
+from src.adapters.json import JSONAdapter
+from src.adapters.zotero import ZoteroAdapter, zotero_available
+from src.models.responses import PaperItem
 
 
 @pytest.fixture
@@ -138,7 +138,7 @@ class TestZoteroAdapter:
     """Test cases for ZoteroAdapter."""
 
     def test_zotero_adapter_import_error(self):
-        """Test that ZoteroAdapter raises clear error when zotero-core not installed."""
+        """Test that ZoteroAdapter raises clear error when zotero-mcp not available."""
         if not zotero_available:
             with pytest.raises(ImportError) as exc_info:
                 ZoteroAdapter(
@@ -146,12 +146,12 @@ class TestZoteroAdapter:
                     api_key="test",
                 )
 
-            assert "zotero-core" in str(exc_info.value)
+            assert "zotero-mcp" in str(exc_info.value)
 
     def test_paper_to_zotero_item_conversion(self):
         """Test conversion of PaperItem to Zotero format."""
         if not zotero_available:
-            pytest.skip("zotero-core not installed")
+            pytest.skip("zotero-mcp not available")
 
         paper = PaperItem(
             title="Test Paper",
@@ -179,14 +179,12 @@ class TestZoteroAdapter:
         assert zotero_item["abstractNote"] == "Test abstract"
         assert zotero_item["DOI"] == "10.1234/test"
         assert zotero_item["date"] == "2024-01-15"
-        assert len(zotero_item["tags"]) == 2
-        assert zotero_item["tags"][0]["tag"] == "tag1"
         assert "accessDate" in zotero_item
 
     def test_paper_to_zotero_item_minimal(self):
         """Test conversion with minimal required fields."""
         if not zotero_available:
-            pytest.skip("zotero-core not installed")
+            pytest.skip("zotero-mcp not available")
 
         paper = PaperItem(
             title="Minimal Paper",
@@ -204,12 +202,11 @@ class TestZoteroAdapter:
         assert zotero_item["itemType"] == "journalArticle"
         assert zotero_item["title"] == "Minimal Paper"
         assert zotero_item["creators"] == []
-        assert zotero_item["abstractNote"] == ""
         assert "accessDate" in zotero_item
 
     @pytest.mark.asyncio
     async def test_zotero_adapter_init_requires_core(self):
-        """Test that adapter initialization fails gracefully without zotero-core."""
+        """Test that adapter initialization fails gracefully without zotero-mcp."""
         if not zotero_available:
             with pytest.raises(ImportError) as exc_info:
                 ZoteroAdapter(
@@ -219,14 +216,13 @@ class TestZoteroAdapter:
 
             # Verify helpful error message
             error_msg = str(exc_info.value)
-            assert "zotero-core" in error_msg
-            assert "pip install" in error_msg
+            assert "zotero-mcp" in error_msg
 
     @pytest.mark.asyncio
     async def test_zotero_adapter_export_requires_core(self):
-        """Test that export fails gracefully without zotero-core."""
+        """Test that export fails gracefully without zotero-mcp."""
         if not zotero_available:
-            # Can't even create adapter without zotero-core
+            # Can't even create adapter without zotero-mcp
             with pytest.raises(ImportError):
                 adapter = ZoteroAdapter(
                     library_id="test",

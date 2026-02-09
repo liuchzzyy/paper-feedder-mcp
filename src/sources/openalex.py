@@ -1,0 +1,373 @@
+"""OpenAlex API client for academic metadata lookup and enrichment."""
+
+import logging
+import re
+from dataclasses import dataclass, field
+from datetime import date
+from typing import Any, Dict, List, Optional
+from urllib.parse import quote
+
+import httpx
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
+from src.config.settings import get_openalex_config
+from src.models.responses import PaperItem
+from src.utils.text import clean_abstract
+
+logger = logging.getLogger(__name__)
+
+
+def _clean_doi(doi: str) -> str:
+    if doi.startswith("https://doi.org/"):
+        return doi[16:]
+    elif doi.startswith("http://doi.org/"):
+        return doi[15:]
+    elif doi.startswith("doi:"):
+        return doi[4:]
+    return doi.strip()
+
+
+def _reconstruct_abstract(
+    inverted_index: Optional[Dict[str, List[int]]],
+) -> Optional[str]:
+    if not inverted_index:
+        return None
+
+    try:
+        word_positions: List[tuple] = []
+        for word, positions in inverted_index.items():
+            for pos in positions:
+                word_positions.append((pos, word))
+        word_positions.sort(key=lambda x: x[0])
+        text = " ".join(wp[1] for wp in word_positions)
+        return clean_abstract(text)
+    except Exception:
+        return None
+
+
+@dataclass
+class OpenAlexWork:
+    """Represents a work (article) from OpenAlex API."""
+
+    doi: str = ""
+    title: str = ""
+    authors: List[str] = field(default_factory=list)
+    journal: Optional[str] = None
+    year: Optional[int] = None
+    volume: Optional[str] = None
+    issue: Optional[str] = None
+    pages: Optional[str] = None
+    abstract: Optional[str] = None
+    url: Optional[str] = None
+    item_type: str = "journalArticle"
+    cited_by_count: Optional[int] = None
+    concepts: List[str] = field(default_factory=list)
+    raw_data: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_api_response(cls, data: Dict[str, Any]) -> "OpenAlexWork":
+        doi_url = data.get("doi", "") or ""
+        doi = doi_url.split("doi.org/")[-1] if "doi.org/" in doi_url else ""
+
+        title = data.get("title", "") or data.get("display_name", "") or ""
+
+        authors: List[str] = []
+        for authorship in data.get("authorships", []):
+            author_data = authorship.get("author", {})
+            name = author_data.get("display_name", "")
+            if name:
+                authors.append(name)
+
+        journal = None
+        primary_location = data.get("primary_location") or {}
+        if primary_location:
+            source = primary_location.get("source") or {}
+            if source:
+                journal = source.get("display_name")
+
+        year = data.get("publication_year")
+
+        biblio = data.get("biblio") or {}
+        volume = biblio.get("volume")
+        issue = biblio.get("issue")
+        first_page = biblio.get("first_page")
+        last_page = biblio.get("last_page")
+        pages = None
+        if first_page and last_page:
+            pages = f"{first_page}-{last_page}"
+        elif first_page:
+            pages = first_page
+
+        abstract = _reconstruct_abstract(data.get("abstract_inverted_index"))
+        url = data.get("doi") or data.get("id")
+
+        openalex_type = data.get("type", "")
+        type_mapping = {
+            "article": "journalArticle",
+            "book": "book",
+            "book-chapter": "bookSection",
+            "dissertation": "thesis",
+            "proceedings": "conferencePaper",
+            "proceedings-article": "conferencePaper",
+            "report": "report",
+            "dataset": "dataset",
+        }
+        item_type = type_mapping.get(openalex_type, "journalArticle")
+
+        cited_by_count = data.get("cited_by_count")
+        if cited_by_count == 0:
+            cited_by_count = None
+
+        concepts: List[str] = []
+        for concept in data.get("concepts", []):
+            if isinstance(concept, dict) and concept.get("score", 0) > 0.3:
+                name = concept.get("display_name", "")
+                if name:
+                    concepts.append(name)
+
+        return cls(
+            doi=doi,
+            title=title,
+            authors=authors,
+            journal=journal,
+            year=year,
+            volume=volume,
+            issue=issue,
+            pages=pages,
+            abstract=abstract,
+            url=url,
+            item_type=item_type,
+            cited_by_count=cited_by_count,
+            concepts=concepts,
+            raw_data=data,
+        )
+
+
+class OpenAlexClient:
+    """Async client for querying the OpenAlex API."""
+
+    def __init__(self, email: Optional[str] = None) -> None:
+        config = get_openalex_config()
+        if email is None:
+            email = config.get("email")
+        self.email = email
+        self._api_base: str = config.get("api_base", "https://api.openalex.org")
+        self._timeout: float = config.get("timeout", 45.0)
+        self._user_agent: str = config.get(
+            "user_agent",
+            "paper-feedder-mcp/2.0 (https://github.com/paper-feedder-mcp; mailto:{email})",
+        )
+        self._client: Optional[httpx.AsyncClient] = None
+
+    @property
+    def _headers(self) -> Dict[str, str]:
+        ua = self._user_agent.format(email=self.email or "noreply@example.com")
+        headers = {"User-Agent": ua}
+        if self.email:
+            headers["mailto"] = self.email
+        return headers
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                base_url=self._api_base,
+                headers=self._headers,
+                timeout=self._timeout,
+            )
+        return self._client
+
+    async def close(self) -> None:
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+
+    @retry(
+        retry=retry_if_exception_type(httpx.HTTPStatusError),
+        stop=stop_after_attempt(4),
+        wait=wait_exponential(multiplier=1, min=1, max=8),
+        reraise=True,
+    )
+    async def _get_with_retry(self, url: str, params: Dict[str, Any]) -> httpx.Response:
+        client = await self._get_client()
+        response = await client.get(url, params=params)
+        response.raise_for_status()
+        return response
+
+    async def search_by_title(
+        self,
+        title: str,
+        per_page: int = 5,
+    ) -> List[OpenAlexWork]:
+        try:
+            response = await self._get_with_retry(
+                "/works",
+                params={"search": title, "per_page": per_page},
+            )
+            data = response.json()
+
+            results = data.get("results", [])
+            works = [OpenAlexWork.from_api_response(item) for item in results]
+
+            logger.info(
+                "OpenAlex search for '%s' returned %d results",
+                title[:50],
+                len(works),
+            )
+            return works
+
+        except httpx.HTTPError as e:
+            logger.error("OpenAlex API error: %s", e)
+            return []
+        except Exception as e:
+            logger.error("Error parsing OpenAlex response: %s", e)
+            return []
+
+    async def get_by_doi(self, doi: str) -> Optional[OpenAlexWork]:
+        doi = _clean_doi(doi)
+
+        doi_url = f"https://doi.org/{doi}"
+
+        try:
+            response = await self._get_with_retry(
+                f"/works/{quote(doi_url, safe='')}",
+                params={},
+            )
+            data = response.json()
+
+            if data:
+                work = OpenAlexWork.from_api_response(data)
+                logger.info("OpenAlex DOI lookup for '%s' successful", doi)
+                return work
+            return None
+
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                logger.warning("DOI not found in OpenAlex: %s", doi)
+            else:
+                logger.error("OpenAlex API error: %s", e)
+            return None
+        except Exception as e:
+            logger.error("Error parsing OpenAlex response: %s", e)
+            return None
+
+    async def find_best_match(
+        self,
+        title: str,
+        threshold: float = 0.8,
+    ) -> Optional[OpenAlexWork]:
+        works = await self.search_by_title(title, per_page=5)
+
+        if not works:
+            return None
+
+        def _normalize(s: str) -> str:
+            s = s.lower()
+            s = re.sub(r"[^\w\s]", "", s)
+            s = re.sub(r"\s+", " ", s).strip()
+            return s
+
+        def _similarity(s1: str, s2: str) -> float:
+            words1 = set(_normalize(s1).split())
+            words2 = set(_normalize(s2).split())
+            if not words1 or not words2:
+                return 0.0
+            intersection = words1 & words2
+            union = words1 | words2
+            return len(intersection) / len(union)
+
+        best_work = None
+        best_score = 0.0
+
+        for work in works:
+            score = _similarity(title, work.title)
+            if score > best_score:
+                best_score = score
+                best_work = work
+
+        if best_work and best_score >= threshold:
+            logger.info(
+                "Best OpenAlex match: '%s' (score: %.2f)",
+                best_work.title[:50],
+                best_score,
+            )
+            return best_work
+
+        logger.warning(
+            "No good OpenAlex match for '%s' (best score: %.2f)",
+            title[:50],
+            best_score,
+        )
+        return None
+
+    async def enrich_paper(self, paper: PaperItem) -> PaperItem:
+        work: Optional[OpenAlexWork] = None
+
+        try:
+            if paper.doi:
+                work = await self.get_by_doi(paper.doi)
+
+            if work is None and paper.title:
+                work = await self.find_best_match(paper.title)
+
+            if work is None:
+                logger.debug("No OpenAlex match for '%s'", paper.title[:60])
+                return paper
+
+            updates: Dict[str, Any] = {}
+
+            if not paper.abstract and work.abstract:
+                updates["abstract"] = work.abstract
+            if not paper.authors and work.authors:
+                updates["authors"] = work.authors
+            if not paper.doi and work.doi:
+                updates["doi"] = work.doi
+            if not paper.url and work.url:
+                updates["url"] = work.url
+            if not paper.published_date and work.year:
+                updates["published_date"] = date(work.year, 1, 1)
+            if not paper.publication_title and work.journal:
+                updates["publication_title"] = work.journal
+            if not paper.volume and work.volume:
+                updates["volume"] = work.volume
+            if not paper.issue and work.issue:
+                updates["issue"] = work.issue
+            if not paper.pages and work.pages:
+                updates["pages"] = work.pages
+            if not paper.item_type or paper.item_type == "journalArticle":
+                if work.item_type and work.item_type != "journalArticle":
+                    updates["item_type"] = work.item_type
+
+            extra = dict(paper.extra)
+            extra["openalex"] = {
+                "cited_by_count": work.cited_by_count,
+                "concepts": work.concepts,
+            }
+            _mapped_keys = {
+                "doi", "title", "display_name", "authorships",
+                "primary_location", "publication_year", "biblio",
+                "abstract_inverted_index", "type", "cited_by_count",
+                "concepts", "id",
+            }
+            openalex_extra = {
+                k: v for k, v in work.raw_data.items()
+                if k not in _mapped_keys
+            }
+            if openalex_extra:
+                extra["openalex_extra"] = openalex_extra
+            updates["extra"] = extra
+
+            enriched = paper.model_copy(update=updates)
+            logger.info(
+                "Enriched '%s' with OpenAlex data (updated %d fields)",
+                paper.title[:50],
+                len(updates) - 1,
+            )
+            return enriched
+
+        except Exception as e:
+            logger.error(
+                "Error enriching paper '%s' from OpenAlex: %s",
+                paper.title[:50],
+                e,
+            )
+            return paper

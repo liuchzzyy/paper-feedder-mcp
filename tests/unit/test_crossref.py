@@ -5,12 +5,12 @@ from datetime import date
 from unittest.mock import patch, AsyncMock, MagicMock
 from typing import Any, Dict
 
-from paper_feed.sources.crossref import (
+from src.sources.crossref import (
     _clean_doi,
     CrossrefWork,
     CrossrefClient,
 )
-from paper_feed.core.models import PaperItem
+from src.models.responses import PaperItem
 
 
 # ============================================================================
@@ -358,7 +358,7 @@ class TestCrossrefWorkFromResponse:
 class TestCrossrefClientInit:
     """Tests for CrossrefClient.__init__()."""
 
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     def test_init_with_email_param(self, mock_config):
         """Test initialization with explicit email parameter."""
         mock_config.return_value = {}
@@ -368,7 +368,7 @@ class TestCrossrefClientInit:
         # Config is still called for other settings (api_base, timeout, etc.)
         mock_config.assert_called_once()
 
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     def test_init_from_config(self, mock_config):
         """Test initialization loading email from config."""
         mock_config.return_value = {"email": "config@example.com"}
@@ -378,7 +378,7 @@ class TestCrossrefClientInit:
         assert client.email == "config@example.com"
         mock_config.assert_called_once()
 
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     def test_init_no_email(self, mock_config):
         """Test initialization with no email (config returns None)."""
         mock_config.return_value = {"email": None}
@@ -392,7 +392,7 @@ class TestCrossrefClientSearchByTitle:
     """Tests for CrossrefClient.search_by_title()."""
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_search_by_title_success(self, mock_config, sample_crossref_response):
         """Test successful title search."""
         mock_config.return_value = {"email": "test@example.com"}
@@ -417,7 +417,7 @@ class TestCrossrefClientSearchByTitle:
         assert results[0].doi == "10.1038/nature.2024.12345"
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_search_by_title_empty_results(self, mock_config):
         """Test title search with no results."""
         mock_config.return_value = {"email": None}
@@ -437,7 +437,7 @@ class TestCrossrefClientSearchByTitle:
         assert len(results) == 0
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_search_by_title_http_error(self, mock_config):
         """Test search handling HTTP errors gracefully."""
         mock_config.return_value = {"email": None}
@@ -453,7 +453,7 @@ class TestCrossrefClientSearchByTitle:
         assert len(results) == 0
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_search_by_title_custom_rows(self, mock_config):
         """Test search with custom row limit."""
         mock_config.return_value = {"email": None}
@@ -480,7 +480,7 @@ class TestCrossrefClientGetByDOI:
     """Tests for CrossrefClient.get_by_doi()."""
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_get_by_doi_success(self, mock_config, sample_crossref_response):
         """Test successful DOI lookup."""
         mock_config.return_value = {"email": None}
@@ -502,7 +502,7 @@ class TestCrossrefClientGetByDOI:
         assert work.title == "A Comprehensive Study on Machine Learning"
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_get_by_doi_404_not_found(self, mock_config):
         """Test DOI lookup with 404 response."""
         mock_config.return_value = {"email": None}
@@ -523,7 +523,7 @@ class TestCrossrefClientGetByDOI:
         assert work is None
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_get_by_doi_cleans_prefix(self, mock_config):
         """Test that DOI prefix is cleaned before lookup."""
         mock_config.return_value = {"email": None}
@@ -554,7 +554,7 @@ class TestCrossrefClientFindBestMatch:
     """Tests for CrossrefClient.find_best_match()."""
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_find_best_match_above_threshold(
         self, mock_config, sample_crossref_response
     ):
@@ -583,7 +583,7 @@ class TestCrossrefClientFindBestMatch:
         assert work.title == "A Comprehensive Study on Machine Learning"
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_find_best_match_below_threshold(
         self, mock_config, sample_crossref_response
     ):
@@ -608,7 +608,7 @@ class TestCrossrefClientFindBestMatch:
         assert work is None
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_find_best_match_no_results(self, mock_config):
         """Test finding best match with no search results."""
         mock_config.return_value = {"email": None}
@@ -632,7 +632,7 @@ class TestCrossrefClientEnrichPaper:
     """Tests for CrossrefClient.enrich_paper()."""
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_enrich_paper_by_doi(
         self, mock_config, sample_crossref_response, minimal_paper_item
     ):
@@ -658,7 +658,7 @@ class TestCrossrefClientEnrichPaper:
         assert enriched.pdf_url == "https://example.com/paper.pdf"
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_enrich_paper_by_title_search(
         self, mock_config, sample_crossref_response
     ):
@@ -682,7 +682,7 @@ class TestCrossrefClientEnrichPaper:
         assert len(enriched.authors) > 0
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_enrich_paper_overwrites_existing_fields(
         self, mock_config, sample_crossref_response
     ):
@@ -709,7 +709,7 @@ class TestCrossrefClientEnrichPaper:
         assert len(enriched.authors) == 3  # From sample response
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_enrich_paper_stores_crossref_metadata(
         self, mock_config, sample_crossref_response, minimal_paper_item
     ):
@@ -739,7 +739,7 @@ class TestCrossrefClientEnrichPaper:
         assert enriched.pages == "123-145"
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_enrich_paper_no_match(self, mock_config, minimal_paper_item):
         """Test enrichment when no CrossRef match is found."""
         mock_config.return_value = {"email": None}
@@ -755,7 +755,7 @@ class TestCrossrefClientEnrichPaper:
         assert enriched == minimal_paper_item
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_enrich_paper_fills_missing_doi(
         self, mock_config, sample_crossref_response
     ):
@@ -779,7 +779,7 @@ class TestCrossrefClientEnrichPaper:
         assert enriched.doi == "10.1038/nature.2024.12345"
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_enrich_paper_fills_missing_url(
         self, mock_config, sample_crossref_response
     ):
@@ -803,7 +803,7 @@ class TestCrossrefClientEnrichPaper:
         assert enriched.url == "https://doi.org/10.1038/nature.2024.12345"
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_enrich_paper_fills_missing_published_date(
         self, mock_config, sample_crossref_response
     ):
@@ -831,7 +831,7 @@ class TestCrossrefClientClose:
     """Tests for CrossrefClient.close()."""
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_close_closes_client(self, mock_config):
         """Test that close() closes the httpx client."""
         mock_config.return_value = {"email": None}
@@ -849,7 +849,7 @@ class TestCrossrefClientClose:
         assert client._client is None
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_close_when_no_client_exists(self, mock_config):
         """Test close() when client was never initialized."""
         mock_config.return_value = {"email": None}
@@ -871,7 +871,7 @@ class TestCrossrefIntegration:
     """Integration-style tests combining multiple components."""
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_full_enrichment_workflow(
         self, mock_config, sample_crossref_response
     ):
@@ -898,7 +898,7 @@ class TestCrossrefIntegration:
         assert enriched.doi is not None
 
     @pytest.mark.asyncio
-    @patch("paper_feed.sources.crossref.get_crossref_config")
+    @patch("src.sources.crossref.get_crossref_config")
     async def test_multiple_papers_enrichment(
         self, mock_config, sample_crossref_response
     ):

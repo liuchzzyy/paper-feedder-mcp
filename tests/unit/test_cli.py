@@ -7,7 +7,7 @@ import pytest
 from datetime import date
 from unittest.mock import AsyncMock, patch
 
-from paper_feed.core.cli import (
+from src.client.cli import (
     _build_parser,
     _load_papers,
     _save_papers,
@@ -17,7 +17,7 @@ from paper_feed.core.cli import (
     _handle_enrich,
     main,
 )
-from paper_feed.core.models import PaperItem, FilterResult
+from src.models.responses import PaperItem, FilterResult
 
 
 # -------------------- Fixtures --------------------
@@ -380,12 +380,12 @@ class TestHandleFetch:
             output=str(output_file),
         )
 
-        with patch("paper_feed.sources.rss.RSSSource") as mock_rss_class:
+        with patch("src.sources.rss.RSSSource") as mock_rss_class:
             mock_source = AsyncMock()
             mock_source.fetch_papers.return_value = sample_papers
             mock_rss_class.return_value = mock_source
 
-            with patch("paper_feed.core.config.get_rss_config") as mock_config:
+            with patch("src.client.cli.get_rss_config") as mock_config:
                 mock_config.return_value = {"opml_path": "feeds/test.opml"}
 
                 await _handle_fetch(args)
@@ -412,7 +412,7 @@ class TestHandleFetch:
             output=str(output_file),
         )
 
-        with patch("paper_feed.sources.rss.RSSSource") as mock_rss_class:
+        with patch("src.sources.rss.RSSSource") as mock_rss_class:
             mock_source = AsyncMock()
             mock_source.fetch_papers.return_value = sample_papers
             mock_rss_class.return_value = mock_source
@@ -435,7 +435,7 @@ class TestHandleFetch:
             output=str(output_file),
         )
 
-        with patch("paper_feed.sources.gmail.GmailSource") as mock_gmail_class:
+        with patch("src.sources.gmail.GmailSource") as mock_gmail_class:
             mock_source = AsyncMock()
             mock_source.fetch_papers.return_value = sample_papers
             mock_gmail_class.return_value = mock_source
@@ -461,15 +461,15 @@ class TestHandleFetch:
             output=str(output_file),
         )
 
-        with patch("paper_feed.sources.gmail.GmailSource") as mock_gmail_class:
+        with patch("src.sources.gmail.GmailSource") as mock_gmail_class:
             mock_source = AsyncMock()
             mock_source.fetch_papers.return_value = sample_papers
             mock_gmail_class.return_value = mock_source
 
             await _handle_fetch(args)
 
-            # Should use default query "is:unread"
-            mock_gmail_class.assert_called_once_with(query="is:unread")
+            # Default query handled by GmailSource
+            mock_gmail_class.assert_called_once_with(query=None)
 
     @pytest.mark.asyncio
     async def test_handle_fetch_with_since_date(self, tmp_path, sample_papers):
@@ -484,12 +484,12 @@ class TestHandleFetch:
             output=str(output_file),
         )
 
-        with patch("paper_feed.sources.rss.RSSSource") as mock_rss_class:
+        with patch("src.sources.rss.RSSSource") as mock_rss_class:
             mock_source = AsyncMock()
             mock_source.fetch_papers.return_value = sample_papers
             mock_rss_class.return_value = mock_source
 
-            with patch("paper_feed.core.config.get_rss_config") as mock_config:
+            with patch("src.client.cli.get_rss_config") as mock_config:
                 mock_config.return_value = {"opml_path": "feeds/test.opml"}
 
                 await _handle_fetch(args)
@@ -539,7 +539,7 @@ class TestHandleFilter:
             ai=False,
         )
 
-        with patch("paper_feed.filters.pipeline.FilterPipeline") as mock_pipeline_class:
+        with patch("src.filters.pipeline.FilterPipeline") as mock_pipeline_class:
             mock_pipeline = AsyncMock()
             papers = _load_papers(str(sample_papers_json))
             result = FilterResult(
@@ -573,7 +573,7 @@ class TestHandleFilter:
             ai=False,
         )
 
-        with patch("paper_feed.filters.pipeline.FilterPipeline") as mock_pipeline_class:
+        with patch("src.filters.pipeline.FilterPipeline") as mock_pipeline_class:
             mock_pipeline = AsyncMock()
             result = FilterResult(
                 papers=[],
@@ -607,7 +607,7 @@ class TestHandleFilter:
             ai=False,
         )
 
-        with patch("paper_feed.filters.pipeline.FilterPipeline") as mock_pipeline_class:
+        with patch("src.filters.pipeline.FilterPipeline") as mock_pipeline_class:
             mock_pipeline = AsyncMock()
             result = FilterResult(
                 papers=[],
@@ -647,11 +647,11 @@ class TestHandleFilter:
             ai=True,
         )
 
-        with patch("paper_feed.core.config.get_openai_config") as mock_config:
+        with patch("src.client.cli.get_openai_config") as mock_config:
             mock_config.return_value = {"api_key": None}
 
             with patch(
-                "paper_feed.filters.pipeline.FilterPipeline"
+                "src.filters.pipeline.FilterPipeline"
             ) as mock_pipeline_class:
                 mock_pipeline = AsyncMock()
                 result = FilterResult(
@@ -712,7 +712,7 @@ class TestHandleExport:
             include_metadata=False,
         )
 
-        with patch("paper_feed.adapters.json.JSONAdapter") as mock_adapter_class:
+        with patch("src.adapters.json.JSONAdapter") as mock_adapter_class:
             mock_adapter = AsyncMock()
             mock_adapter_class.return_value = mock_adapter
 
@@ -740,7 +740,7 @@ class TestHandleExport:
             include_metadata=False,
         )
 
-        with patch("paper_feed.adapters.zotero.ZoteroAdapter") as mock_adapter_class:
+        with patch("src.adapters.zotero.ZoteroAdapter") as mock_adapter_class:
             mock_adapter = AsyncMock()
             mock_adapter_class.return_value = mock_adapter
 
@@ -766,7 +766,7 @@ class TestHandleExport:
             include_metadata=True,
         )
 
-        with patch("paper_feed.adapters.json.JSONAdapter") as mock_adapter_class:
+        with patch("src.adapters.json.JSONAdapter") as mock_adapter_class:
             mock_adapter = AsyncMock()
             mock_adapter_class.return_value = mock_adapter
 
@@ -828,7 +828,7 @@ class TestHandleEnrich:
             concurrency=5,
         )
 
-        with patch("paper_feed.sources.crossref.CrossrefClient") as mock_client_class:
+        with patch("src.sources.crossref.CrossrefClient") as mock_client_class:
             mock_client = AsyncMock()
             # Return modified paper to show enrichment
             mock_paper = sample_papers[0].model_copy()
@@ -856,7 +856,7 @@ class TestHandleEnrich:
             concurrency=5,
         )
 
-        with patch("paper_feed.sources.openalex.OpenAlexClient") as mock_client_class:
+        with patch("src.sources.openalex.OpenAlexClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.enrich_paper.return_value = sample_papers[0]
             mock_client_class.return_value = mock_client
@@ -879,9 +879,9 @@ class TestHandleEnrich:
             concurrency=5,
         )
 
-        with patch("paper_feed.sources.crossref.CrossrefClient") as mock_crossref_class:
+        with patch("src.sources.crossref.CrossrefClient") as mock_crossref_class:
             with patch(
-                "paper_feed.sources.openalex.OpenAlexClient"
+                "src.sources.openalex.OpenAlexClient"
             ) as mock_openalex_class:
                 mock_crossref = AsyncMock()
                 mock_openalex = AsyncMock()
@@ -910,7 +910,7 @@ class TestHandleEnrich:
             concurrency=2,
         )
 
-        with patch("paper_feed.sources.crossref.CrossrefClient") as mock_client_class:
+        with patch("src.sources.crossref.CrossrefClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.enrich_paper.return_value = sample_papers[0]
             mock_client_class.return_value = mock_client
@@ -946,20 +946,23 @@ class TestHandleEnrich:
 class TestMain:
     """Tests for main CLI entry point."""
 
-    def test_main_no_args_prints_help(self, capsys):
-        """Test main with no arguments prints help and exits."""
-        with patch("sys.argv", ["paper-feed"]):
-            with pytest.raises(SystemExit) as exc_info:
+    @staticmethod
+    def _close_coro(coro):
+        try:
+            coro.close()
+        except Exception:
+            pass
+
+    def test_main_no_args_runs_server(self):
+        """Test main with no arguments runs server."""
+        with patch("sys.argv", ["paper-feedder-mcp"]):
+            with patch("asyncio.run", side_effect=self._close_coro) as mock_run:
                 main()
-
-            assert exc_info.value.code == 0
-
-        captured = capsys.readouterr()
-        assert "usage:" in captured.out
+                mock_run.assert_called_once()
 
     def test_main_help_flag(self, capsys):
         """Test main with --help flag."""
-        with patch("sys.argv", ["paper-feed", "--help"]):
+        with patch("sys.argv", ["paper-feedder-mcp", "--help"]):
             with pytest.raises(SystemExit) as exc_info:
                 main()
 
@@ -970,7 +973,7 @@ class TestMain:
 
     def test_main_unknown_command_exits(self, capsys):
         """Test main with unknown command exits."""
-        with patch("sys.argv", ["paper-feed", "unknown"]):
+        with patch("sys.argv", ["paper-feedder-mcp", "unknown"]):
             with pytest.raises(SystemExit) as exc_info:
                 main()
 
@@ -979,11 +982,11 @@ class TestMain:
 
     def test_main_calls_handler_for_valid_command(self):
         """Test main dispatches to correct handler."""
-        with patch("sys.argv", ["paper-feed", "fetch", "--output", "out.json"]):
-            with patch("paper_feed.core.cli._handle_fetch") as mock_handler:
+        with patch("sys.argv", ["paper-feedder-mcp", "fetch", "--output", "out.json"]):
+            with patch("src.client.cli._handle_fetch") as mock_handler:
                 mock_handler.return_value = None
 
-                with patch("asyncio.run") as mock_run:
+                with patch("asyncio.run", side_effect=self._close_coro) as mock_run:
                     main()
 
                     # Verify handler was passed to asyncio.run
@@ -991,8 +994,12 @@ class TestMain:
 
     def test_main_keyboard_interrupt_exits(self, capsys):
         """Test main handles KeyboardInterrupt."""
-        with patch("sys.argv", ["paper-feed", "fetch", "--output", "out.json"]):
-            with patch("asyncio.run", side_effect=KeyboardInterrupt()):
+        with patch("sys.argv", ["paper-feedder-mcp", "fetch", "--output", "out.json"]):
+            def _raise_interrupt(coro):
+                self._close_coro(coro)
+                raise KeyboardInterrupt()
+
+            with patch("asyncio.run", side_effect=_raise_interrupt):
                 with pytest.raises(SystemExit) as exc_info:
                     main()
 
@@ -1003,8 +1010,12 @@ class TestMain:
 
     def test_main_generic_exception_exits(self, capsys):
         """Test main handles generic exceptions."""
-        with patch("sys.argv", ["paper-feed", "fetch", "--output", "out.json"]):
-            with patch("asyncio.run", side_effect=ValueError("Test error")):
+        with patch("sys.argv", ["paper-feedder-mcp", "fetch", "--output", "out.json"]):
+            def _raise_error(coro):
+                self._close_coro(coro)
+                raise ValueError("Test error")
+
+            with patch("asyncio.run", side_effect=_raise_error):
                 with pytest.raises(SystemExit) as exc_info:
                     main()
 
@@ -1033,12 +1044,12 @@ class TestIntegration:
             output=str(output_file),
         )
 
-        with patch("paper_feed.sources.rss.RSSSource") as mock_rss_class:
+        with patch("src.sources.rss.RSSSource") as mock_rss_class:
             mock_source = AsyncMock()
             mock_source.fetch_papers.return_value = sample_papers
             mock_rss_class.return_value = mock_source
 
-            with patch("paper_feed.core.config.get_rss_config") as mock_config:
+            with patch("src.client.cli.get_rss_config") as mock_config:
                 mock_config.return_value = {"opml_path": "feeds/test.opml"}
 
                 await _handle_fetch(args)
@@ -1064,7 +1075,7 @@ class TestIntegration:
             ai=False,
         )
 
-        with patch("paper_feed.filters.pipeline.FilterPipeline") as mock_pipeline_class:
+        with patch("src.filters.pipeline.FilterPipeline") as mock_pipeline_class:
             mock_pipeline = AsyncMock()
             result = FilterResult(
                 papers=[],
@@ -1085,7 +1096,7 @@ class TestIntegration:
             include_metadata=False,
         )
 
-        with patch("paper_feed.adapters.json.JSONAdapter") as mock_adapter_class:
+        with patch("src.adapters.json.JSONAdapter") as mock_adapter_class:
             mock_adapter = AsyncMock()
             mock_adapter_class.return_value = mock_adapter
 

@@ -10,9 +10,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from paper_feed.filters.ai_filter import AIFilterStage
-from paper_feed.ai.keyword_generator import KeywordGenerator
-from paper_feed.core.models import FilterCriteria, PaperItem
+from src.filters.ai_filter import AIFilterStage
+from src.ai.keyword_generator import KeywordGenerator
+from src.models.responses import FilterCriteria, PaperItem
 
 
 # ============================================================================
@@ -87,19 +87,19 @@ def mock_config(monkeypatch):
         return "Interested in battery materials and electrochemistry"
 
     monkeypatch.setattr(
-        "paper_feed.ai.keyword_generator.get_openai_config",
+        "src.ai.keyword_generator.get_openai_config",
         mock_get_openai_config,
     )
     monkeypatch.setattr(
-        "paper_feed.ai.keyword_generator.get_research_prompt",
+        "src.ai.keyword_generator.get_research_prompt",
         mock_get_research_prompt,
     )
     monkeypatch.setattr(
-        "paper_feed.filters.ai_filter.get_openai_config",
+        "src.filters.ai_filter.get_openai_config",
         mock_get_openai_config,
     )
     monkeypatch.setattr(
-        "paper_feed.filters.ai_filter.get_research_prompt",
+        "src.filters.ai_filter.get_research_prompt",
         mock_get_research_prompt,
     )
 
@@ -342,7 +342,7 @@ class TestAIFilterStageApplicability:
     def test_is_applicable_without_client(self, mock_config, monkeypatch):
         """is_applicable returns False when client is None."""
         monkeypatch.setattr(
-            "paper_feed.filters.ai_filter.get_openai_config",
+            "src.filters.ai_filter.get_openai_config",
             lambda: {"api_key": None, "model": "gpt-4o-mini", "base_url": None},
         )
         stage = AIFilterStage(openai_client=None)
@@ -492,7 +492,7 @@ class TestAIFilterStageFilter:
     async def test_filter_without_client(self, sample_papers, mock_config, monkeypatch):
         """Filter without client returns all papers."""
         monkeypatch.setattr(
-            "paper_feed.filters.ai_filter.get_openai_config",
+            "src.filters.ai_filter.get_openai_config",
             lambda: {"api_key": None, "model": "gpt-4o-mini", "base_url": None},
         )
         stage = AIFilterStage(openai_client=None)
@@ -506,7 +506,7 @@ class TestAIFilterStageFilter:
     ):
         """Filter without research prompt returns all papers."""
         monkeypatch.setattr(
-            "paper_feed.filters.ai_filter.get_research_prompt",
+            "src.filters.ai_filter.get_research_prompt",
             lambda: None,
         )
 
@@ -572,7 +572,7 @@ class TestKeywordGeneratorExtractKeywords:
         """Extract keywords from provided prompt."""
         # Mock the cache file location
         monkeypatch.setattr(
-            "paper_feed.ai.keyword_generator.KEYWORDS_CACHE_FILE",
+            "src.ai.keyword_generator.KEYWORDS_CACHE_FILE",
             tmp_path / "cache" / "keywords.json",
         )
 
@@ -590,7 +590,7 @@ class TestKeywordGeneratorExtractKeywords:
     ):
         """Extract without prompt raises ValueError."""
         monkeypatch.setattr(
-            "paper_feed.ai.keyword_generator.get_research_prompt",
+            "src.ai.keyword_generator.get_research_prompt",
             lambda: None,
         )
 
@@ -613,7 +613,7 @@ class TestKeywordGeneratorExtractKeywords:
         )
 
         monkeypatch.setattr(
-            "paper_feed.ai.keyword_generator.KEYWORDS_CACHE_FILE",
+            "src.ai.keyword_generator.KEYWORDS_CACHE_FILE",
             cache_file,
         )
 

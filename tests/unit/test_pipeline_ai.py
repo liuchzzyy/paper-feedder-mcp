@@ -12,8 +12,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from paper_feed.core.models import FilterCriteria, PaperItem
-from paper_feed.filters.pipeline import FilterPipeline
+from src.models.responses import FilterCriteria, PaperItem
+from src.filters.pipeline import FilterPipeline
 
 
 # ============================================================================
@@ -76,15 +76,15 @@ def mock_config(monkeypatch):
         return "Interested in battery materials and electrochemistry"
 
     monkeypatch.setattr(
-        "paper_feed.filters.pipeline.get_openai_config"
+        "src.filters.ai_filter.get_openai_config"
         if hasattr(FilterPipeline, "get_openai_config")
-        else "paper_feed.filters.ai_filter.get_openai_config",
+        else "src.filters.ai_filter.get_openai_config",
         mock_get_openai_config,
     )
     monkeypatch.setattr(
-        "paper_feed.filters.pipeline.get_research_prompt"
+        "src.filters.ai_filter.get_research_prompt"
         if hasattr(FilterPipeline, "get_research_prompt")
-        else "paper_feed.filters.ai_filter.get_research_prompt",
+        else "src.filters.ai_filter.get_research_prompt",
         mock_get_research_prompt,
     )
 

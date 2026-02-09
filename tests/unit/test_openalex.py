@@ -4,13 +4,13 @@ import pytest
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from paper_feed.sources.openalex import (
+from src.sources.openalex import (
     _clean_doi,
     _reconstruct_abstract,
     OpenAlexWork,
     OpenAlexClient,
 )
-from paper_feed.core.models import PaperItem
+from src.models.responses import PaperItem
 
 
 class Test_CleanDOI:
@@ -362,7 +362,7 @@ class TestOpenAlexClientInit:
 
     def test_client_init_without_email_from_config(self):
         """Test client initialization loading email from config."""
-        with patch("paper_feed.sources.openalex.get_openalex_config") as mock_config:
+        with patch("src.sources.openalex.get_openalex_config") as mock_config:
             mock_config.return_value = {"email": "config@example.com"}
 
             client = OpenAlexClient(email=None)
@@ -371,7 +371,7 @@ class TestOpenAlexClientInit:
 
     def test_client_init_without_email_none_config(self):
         """Test client initialization when config returns None."""
-        with patch("paper_feed.sources.openalex.get_openalex_config") as mock_config:
+        with patch("src.sources.openalex.get_openalex_config") as mock_config:
             mock_config.return_value = {"email": None}
 
             client = OpenAlexClient(email=None)
@@ -389,12 +389,12 @@ class TestOpenAlexClientHeaders:
         headers = client._headers
 
         assert "User-Agent" in headers
-        assert "paper-feed" in headers["User-Agent"]
+        assert "paper-feedder-mcp" in headers["User-Agent"]
         assert "user@example.com" in headers["User-Agent"]
         assert "mailto" in headers
         assert headers["mailto"] == "user@example.com"
 
-    @patch("paper_feed.sources.openalex.get_openalex_config")
+    @patch("src.sources.openalex.get_openalex_config")
     def test_headers_without_email(self, mock_config):
         """Test that headers use default email when not provided."""
         mock_config.return_value = {}
@@ -429,7 +429,7 @@ class TestOpenAlexClientSearchByTitle:
         mock_response.raise_for_status = MagicMock()
 
         with patch(
-            "paper_feed.sources.openalex.httpx.AsyncClient"
+            "src.sources.openalex.httpx.AsyncClient"
         ) as mock_client_class:
             mock_client_instance = AsyncMock()
             mock_client_instance.get = AsyncMock(return_value=mock_response)
@@ -451,7 +451,7 @@ class TestOpenAlexClientSearchByTitle:
         mock_response.raise_for_status = MagicMock()
 
         with patch(
-            "paper_feed.sources.openalex.httpx.AsyncClient"
+            "src.sources.openalex.httpx.AsyncClient"
         ) as mock_client_class:
             mock_client_instance = AsyncMock()
             mock_client_instance.get = AsyncMock(return_value=mock_response)
@@ -467,7 +467,7 @@ class TestOpenAlexClientSearchByTitle:
         client = OpenAlexClient(email="test@example.com")
 
         with patch(
-            "paper_feed.sources.openalex.httpx.AsyncClient"
+            "src.sources.openalex.httpx.AsyncClient"
         ) as mock_client_class:
             mock_client_instance = AsyncMock()
             mock_client_instance.get = AsyncMock(side_effect=Exception("Network error"))
@@ -487,7 +487,7 @@ class TestOpenAlexClientSearchByTitle:
         mock_response.raise_for_status = MagicMock()
 
         with patch(
-            "paper_feed.sources.openalex.httpx.AsyncClient"
+            "src.sources.openalex.httpx.AsyncClient"
         ) as mock_client_class:
             mock_client_instance = AsyncMock()
             mock_client_instance.get = AsyncMock(return_value=mock_response)
@@ -519,7 +519,7 @@ class TestOpenAlexClientGetByDOI:
         mock_response.raise_for_status = MagicMock()
 
         with patch(
-            "paper_feed.sources.openalex.httpx.AsyncClient"
+            "src.sources.openalex.httpx.AsyncClient"
         ) as mock_client_class:
             mock_client_instance = AsyncMock()
             mock_client_instance.get = AsyncMock(return_value=mock_response)
@@ -544,7 +544,7 @@ class TestOpenAlexClientGetByDOI:
         )
 
         with patch(
-            "paper_feed.sources.openalex.httpx.AsyncClient"
+            "src.sources.openalex.httpx.AsyncClient"
         ) as mock_client_class:
             mock_client_instance = AsyncMock()
             mock_client_instance.get = AsyncMock(side_effect=error)
@@ -567,7 +567,7 @@ class TestOpenAlexClientGetByDOI:
         mock_response.raise_for_status = MagicMock()
 
         with patch(
-            "paper_feed.sources.openalex.httpx.AsyncClient"
+            "src.sources.openalex.httpx.AsyncClient"
         ) as mock_client_class:
             mock_client_instance = AsyncMock()
             mock_client_instance.get = AsyncMock(return_value=mock_response)

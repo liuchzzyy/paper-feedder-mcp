@@ -4,8 +4,8 @@ import os
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 
-from paper_feed.sources import RSSSource, OPMLParser, parse_opml
-from paper_feed.sources.rss_parser import RSSParser
+from src.sources import RSSSource, OPMLParser, parse_opml
+from src.sources.rss_parser import RSSParser
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +139,7 @@ def test_rss_source_env_variable(monkeypatch):
     if not os.path.exists(opml_path):
         pytest.skip(f"OPML file not found: {opml_path}")
 
-    monkeypatch.setenv("PAPER_FEED_OPML", opml_path)
+    monkeypatch.setenv("PAPER_FEEDDER_MCP_OPML", opml_path)
 
     # No explicit path — should use env var
     source = RSSSource()
@@ -155,7 +155,7 @@ def test_rss_source_default_path(monkeypatch):
     if not os.path.exists(opml_path):
         pytest.skip(f"OPML file not found: {opml_path}")
 
-    monkeypatch.delenv("PAPER_FEED_OPML", raising=False)
+    monkeypatch.delenv("PAPER_FEEDDER_MCP_OPML", raising=False)
 
     source = RSSSource()
 
@@ -223,7 +223,7 @@ async def test_fetch_papers_aggregates(tmp_path):
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("paper_feed.sources.rss.httpx.AsyncClient", return_value=mock_client):
+    with patch("src.sources.rss.httpx.AsyncClient", return_value=mock_client):
         papers = await source.fetch_papers()
 
     # 2 feeds × 2 papers each, but alpha/beta urls are the same across feeds
@@ -248,7 +248,7 @@ async def test_fetch_papers_respects_limit(tmp_path):
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("paper_feed.sources.rss.httpx.AsyncClient", return_value=mock_client):
+    with patch("src.sources.rss.httpx.AsyncClient", return_value=mock_client):
         papers = await source.fetch_papers(limit=1)
 
     assert len(papers) == 1
@@ -278,7 +278,7 @@ async def test_fetch_papers_handles_feed_failure(tmp_path):
 
     import httpx
 
-    with patch("paper_feed.sources.rss.httpx.AsyncClient", return_value=mock_client):
+    with patch("src.sources.rss.httpx.AsyncClient", return_value=mock_client):
         papers = await source.fetch_papers()
 
     # Only one feed succeeded → 2 papers

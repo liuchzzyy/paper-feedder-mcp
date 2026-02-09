@@ -1,23 +1,27 @@
 [project]
-name = "paper-feed"
-version = "1.1.1"
-description = "Academic paper collection from RSS and Gmail alerts"
+name = "paper-feedder-mcp"
+version = "2.1.0"
+description = "MCP server for academic paper collection, filtering, and enrichment from RSS feeds and Gmail alerts"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
+keywords = ["mcp", "model-context-protocol", "academic", "papers", "rss", "gmail"]
 dependencies = [
     "feedparser>=6.0.0",
     "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
     "httpx>=0.25.0",
     "python-dateutil>=2.8.0",
     "beautifulsoup4>=4.12.0",
     "ezgmail>=0.1.0",
     "openai>=1.0.0",
     "python-dotenv>=1.0.0",
+    "mcp>=1.2.1,<2",
+    "tenacity>=8.2.0",
 ]
 
 [project.optional-dependencies]
 zotero = [
-    # "zotero-core>=1.0.0",  # TODO: Will be implemented.
+    # Local zotero-mcp repository is used (set ZOTERO_MCP_PATH if needed).
 ]
 dev = [
     "pytest>=7.0.0",
@@ -26,18 +30,18 @@ dev = [
 ]
 
 [project.scripts]
-paper-feed = "paper_feed.core.cli:main"
+paper-feedder-mcp = "src.client.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/paper_feed"]
+packages = ["src"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py312"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

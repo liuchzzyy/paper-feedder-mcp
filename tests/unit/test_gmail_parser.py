@@ -2,7 +2,7 @@
 
 import pytest
 
-from paper_feed.sources.gmail_parser import GmailParser
+from src.sources.gmail_parser import GmailParser
 
 
 @pytest.fixture
