@@ -49,10 +49,9 @@ jobs:
           # Pin to avoid intermittent failures when "latest" is unavailable.
           version: "0.5.21"
           enable-cache: true
-          cache-dependency-glob: uv.lock
 
       - name: Install dependencies
-        run: uv sync --locked --no-dev
+        run: uv sync
 
       - name: Compute dates
         shell: bash
