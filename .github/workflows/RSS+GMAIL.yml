@@ -33,10 +33,17 @@ jobs:
       ZOTERO_LIBRARY_ID: ${{ secrets.ZOTERO_LIBRARY_ID }}
       ZOTERO_API_KEY: ${{ secrets.ZOTERO_API_KEY }}
       ZOTERO_LIBRARY_TYPE: user
+      ZOTERO_MCP_PATH: ${{ github.workspace }}/zotero-mcp/src
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Checkout zotero-mcp
+        uses: actions/checkout@v4
+        with:
+          repository: liuchzzyy/zotero-mcp
+          path: zotero-mcp
 
       - name: Set up Python
         uses: actions/setup-python@v5
