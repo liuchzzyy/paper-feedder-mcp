@@ -80,5 +80,5 @@ uv run ty check
 
 ---
 
-**Version**: 2.1.1  
-**Last Updated**: 2026-02-09
+**Version**: 2.5.0
+**Last Updated**: 2026-02-12
