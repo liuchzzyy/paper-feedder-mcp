@@ -3,56 +3,21 @@
 from __future__ import annotations
 
 from datetime import datetime
-import os
-from pathlib import Path
-import sys
 from typing import Any, Dict, List, Optional
 
 from src.models.responses import ExportAdapter, PaperItem
 
-_ZOTERO_MCP_DEFAULT_PATH = Path(r"E:\Desktop\SciPapers\zotero-mcp\src")
-
-
-def _ensure_zotero_mcp_on_path() -> bool:
-    env_path = os.getenv("ZOTERO_MCP_PATH")
-    candidates: list[Path] = []
-    if env_path:
-        candidates.append(Path(env_path))
-    candidates.append(_ZOTERO_MCP_DEFAULT_PATH)
-
-    for candidate in candidates:
-        if candidate.exists():
-            candidate_str = str(candidate)
-            if candidate_str not in sys.path:
-                sys.path.insert(0, candidate_str)
-            return True
-    return False
-
-
 try:
-    from zotero_mcp.config import Config
-    from zotero_mcp.integration.zotero_integration import ZoteroIntegration
+    from zotero_mcp.clients.zotero.api_client import ZoteroAPIClient
+    from zotero_mcp.services.zotero.item_service import ItemService
 
     zotero_available = True
     _zotero_import_error: Exception | None = None
 except Exception as exc:
-    if _ensure_zotero_mcp_on_path():
-        try:
-            from zotero_mcp.config import Config
-            from zotero_mcp.integration.zotero_integration import ZoteroIntegration
-
-            zotero_available = True
-            _zotero_import_error = None
-        except Exception as exc2:
-            zotero_available = False
-            _zotero_import_error = exc2
-            Config = None
-            ZoteroIntegration = None
-    else:
-        zotero_available = False
-        _zotero_import_error = exc
-        Config = None
-        ZoteroIntegration = None
+    zotero_available = False
+    _zotero_import_error = exc
+    ZoteroAPIClient = None  # type: ignore[assignment,misc]
+    ItemService = None  # type: ignore[assignment,misc]
 
 
 class ZoteroAdapter(ExportAdapter):
@@ -66,25 +31,22 @@ class ZoteroAdapter(ExportAdapter):
         api_key: str,
         library_type: str = "user",
     ):
-        if not zotero_available or Config is None or ZoteroIntegration is None:
-            path_hint = str(_ZOTERO_MCP_DEFAULT_PATH)
-            env_hint = "Set ZOTERO_MCP_PATH to the zotero-mcp src directory."
+        if not zotero_available or ZoteroAPIClient is None or ItemService is None:
             raise ImportError(
                 "zotero-mcp is required for ZoteroAdapter. "
-                f"Expected repo at: {path_hint}. {env_hint}"
+                "Install it with: uv pip install /path/to/zotero-mcp"
             ) from _zotero_import_error
 
         self.library_id = library_id
         self.api_key = api_key
         self.library_type = library_type
 
-        self._config = Config(
-            zotero_library_id=library_id,
-            zotero_api_key=api_key,
-            zotero_library_type=library_type,
+        self._api_client = ZoteroAPIClient(
+            library_id=library_id,
+            library_type=library_type,
+            api_key=api_key,
         )
-        self._integration = ZoteroIntegration(self._config)
-        self._item_service = self._integration.item_service
+        self._item_service = ItemService(api_client=self._api_client)
 
     async def export(
         self,
@@ -95,7 +57,7 @@ class ZoteroAdapter(ExportAdapter):
         if not zotero_available:
             raise ImportError(
                 "zotero-mcp is required for ZoteroAdapter. "
-                "Set ZOTERO_MCP_PATH or place the repo at the default path."
+                "Install it with: uv pip install /path/to/zotero-mcp"
             ) from _zotero_import_error
 
         success_count = 0
