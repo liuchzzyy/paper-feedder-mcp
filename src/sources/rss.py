@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import re
 from datetime import date
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
@@ -14,33 +13,13 @@ from src.config.settings import get_rss_config
 from src.models.responses import PaperItem, PaperSource
 from src.sources.opml import OPMLParser
 from src.sources.rss_parser import RSSParser
+from src.utils.dedup import deduplicate_papers, identity_keys_for_paper
 
 logger = logging.getLogger(__name__)
 
-_TITLE_NOISE = re.compile(
-    r"\b(ASAP|Just Accepted|Early Access|Ahead of Print|In Press)\b",
-    re.IGNORECASE,
-)
-
-
-def _normalize_title(title: str) -> str:
-    t = title.lower().strip()
-    t = _TITLE_NOISE.sub("", t)
-    t = re.sub(r"[^\w\s]", "", t)
-    t = re.sub(r"\s+", " ", t).strip()
-    return t
-
-
 def _dedup_key(paper: PaperItem) -> tuple[str, str] | None:
-    if paper.doi:
-        return ("doi", paper.doi.lower().strip())
-    if paper.url:
-        return ("url", paper.url.strip())
-    if paper.title:
-        nt = _normalize_title(paper.title)
-        if nt:
-            return ("title", nt)
-    return None
+    keys = identity_keys_for_paper(paper)
+    return keys[0] if keys else None
 
 
 class RSSSource(PaperSource):
@@ -110,8 +89,7 @@ class RSSSource(PaperSource):
             tasks = [_fetch_one(f) for f in self._feeds]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        all_papers: List[PaperItem] = []
-        seen_keys: set[tuple[str, str]] = set()
+        all_papers_raw: List[PaperItem] = []
 
         for i, result in enumerate(results):
             if isinstance(result, BaseException):
@@ -121,11 +99,16 @@ class RSSSource(PaperSource):
                 )
                 continue
 
-            for paper in result:
-                key = _dedup_key(paper)
-                if key is not None and key not in seen_keys:
-                    seen_keys.add(key)
-                    all_papers.append(paper)
+            all_papers_raw.extend(result)
+
+        all_papers, dedup_stats = deduplicate_papers(all_papers_raw)
+        logger.info(
+            "RSS fetch dedup stats: input=%d, unique=%d, dropped=%d, by_key=%s",
+            dedup_stats["input_count"],
+            dedup_stats["unique_count"],
+            dedup_stats["dropped_count"],
+            dedup_stats["duplicates_by_key"],
+        )
 
         if limit and len(all_papers) > limit:
             all_papers = all_papers[:limit]

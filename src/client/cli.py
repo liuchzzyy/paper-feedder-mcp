@@ -105,6 +105,13 @@ async def _handle_filter(args: argparse.Namespace) -> None:
                 print(
                     f"Auto-generated keywords from RESEARCH_PROMPT: {keywords}"
                 )
+            else:
+                print(
+                    "Error: no keywords available. "
+                    "Provide --keywords or configure RESEARCH_PROMPT with a valid AI API key.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
         except Exception as exc:
             print(
                 f"Error: failed to generate keywords from RESEARCH_PROMPT: {exc}",
@@ -152,6 +159,12 @@ async def _handle_filter(args: argparse.Namespace) -> None:
 
 async def _handle_export(args: argparse.Namespace) -> None:
     papers = _load_papers(args.input)
+    input_name = Path(args.input).name.lower()
+    if input_name == "raw.json":
+        print(
+            "Warning: exporting from raw.json means filter step was not applied.",
+            file=sys.stderr,
+        )
 
     if args.format == "json":
         from src.adapters.json import JSONAdapter
@@ -166,12 +179,23 @@ async def _handle_export(args: argparse.Namespace) -> None:
         from src.adapters.zotero import ZoteroAdapter
 
         zotero_config = get_zotero_config()
+        collection_id = (
+            getattr(args, "collection", None)
+            or zotero_config.get("target_collection")
+        )
         adapter = ZoteroAdapter(
             library_id=zotero_config["library_id"],
             api_key=zotero_config["api_key"],
             library_type=zotero_config.get("library_type", "user"),
         )
-        await adapter.export(papers)
+        result = await adapter.export(papers, collection_id=collection_id)
+        print(
+            "Zotero export stats: "
+            f"created={result.get('success_count', 0)}, "
+            f"skipped={result.get('skipped_count', 0)}, "
+            f"failed={len(result.get('failures', []))}, "
+            f"collection={collection_id or 'root'}"
+        )
     else:
         print(
             f"Error: unknown format: {args.format}",
@@ -414,6 +438,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output",
         required=True,
         help="输出文件路径",
+    )
+    export_parser.add_argument(
+        "--collection",
+        "--zotero-collection",
+        dest="collection",
+        help="Zotero collection key（仅 format=zotero 生效）",
     )
     metadata_group = export_parser.add_mutually_exclusive_group()
     metadata_group.add_argument(

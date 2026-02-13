@@ -97,7 +97,9 @@ Notes:
 - Use `paper-feedder-mcp delete` to clean `output/` and common intermediate files when needed.
 - Use `--no-ai` to disable AI filtering; use `--no-metadata` to omit extra fields in export.
 - If `--keywords` is omitted, keywords will be auto-generated from `RESEARCH_PROMPT` using the AI keyword generator.
+- If keyword auto-generation fails and returns empty keywords, `filter` now exits with an error instead of silently passing all papers.
 - If OpenAlex returns `429`, set `OPENALEX_API_KEY`, lower `OPENALEX_MAX_REQUESTS_PER_SECOND`, and consider reducing `--concurrency`.
+- For Zotero exports, use `--collection <key>` or set `TARGET_COLLECTION` in `.env`/GitHub Secrets.
 
 ### Python API
 
@@ -149,9 +151,38 @@ Key settings:
 | `PAPER_FEEDDER_MCP_USER_AGENT` | Shared User-Agent for RSS/CrossRef/OpenAlex |
 | `OPENALEX_API_KEY` | OpenAlex API key (recommended to avoid rate limits) |
 | `OPENALEX_MAX_REQUESTS_PER_SECOND` | Client-side throttle for OpenAlex requests |
+| `TARGET_COLLECTION` | Default Zotero collection key used by `export --format zotero` |
 | `ZOTERO_MCP_PATH` | Path to `zotero-mcp/src` (if not at default location) |
 
 See `.env.example` for all available options.
+
+## GitHub Actions
+
+Workflow: `.github/workflows/RSS+GMAIL.yml`
+
+- Trigger:
+  - Scheduled daily run
+  - Manual run (`workflow_dispatch`)
+- Pipeline:
+  - RSS: `fetch -> filter(--no-ai) -> filter(--ai) -> enrich -> export`
+  - Gmail: `fetch -> filter(--no-ai) -> filter(--ai) -> enrich -> export`
+- Behavior:
+  - If fetched count is `0`, downstream steps are skipped safely for that source.
+  - If `TARGET_COLLECTION` is set, Zotero export writes into that collection.
+
+Recommended repository secrets:
+
+- `OPENAI_API_KEY`
+- `OPENAI_BASE_URL` (optional)
+- `OPENAI_MODEL` (optional)
+- `RESEARCH_PROMPT` (recommended)
+- `OPENALEX_API_KEY` (recommended)
+- `POLITE_POOL_EMAIL` (recommended)
+- `GMAIL_TOKEN_JSON` / `GMAIL_CREDENTIALS_JSON` (for Gmail pipeline)
+- `GMAIL_SENDER_FILTER` / `GMAIL_SENDER_MAP_JSON` (optional)
+- `ZOTERO_LIBRARY_ID`
+- `ZOTERO_API_KEY`
+- `TARGET_COLLECTION` (optional)
 
 ## Project Structure
 

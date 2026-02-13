@@ -171,6 +171,12 @@ class OpenAlexClient:
             "paper-feedder-mcp/2.0 (https://github.com/paper-feedder-mcp; mailto:{email})",
         )
         self._max_rps: int = int(config.get("max_requests_per_second", 10) or 10)
+        if self._api_key:
+            logger.info("OpenAlex API key detected; requests will include api_key.")
+        else:
+            logger.warning(
+                "OpenAlex API key is not configured; requests may hit tighter rate limits (429)."
+            )
         if os.getenv("PYTEST_CURRENT_TEST") or "pytest" in sys.modules:
             self._min_interval = 0.0
         else:
@@ -311,6 +317,7 @@ class OpenAlexClient:
     async def find_best_match(
         self,
         title: str,
+        authors: Optional[List[str]] = None,
         threshold: float = 0.8,
     ) -> Optional[OpenAlexWork]:
         works = await self.search_by_title(title, per_page=5)
@@ -333,11 +340,34 @@ class OpenAlexClient:
             union = words1 | words2
             return len(intersection) / len(union)
 
+        def _norm_author(a: str) -> str:
+            a = a.lower()
+            a = re.sub(r"[^\w\s]", " ", a)
+            a = re.sub(r"\s+", " ", a).strip()
+            return a
+
+        def _author_overlap(a1: List[str], a2: List[str]) -> float:
+            if not a1 or not a2:
+                return 0.0
+            s1 = {_norm_author(a) for a in a1 if a}
+            s2 = {_norm_author(a) for a in a2 if a}
+            if not s1 or not s2:
+                return 0.0
+            inter = s1 & s2
+            union = s1 | s2
+            return len(inter) / len(union) if union else 0.0
+
+        query_authors = authors or []
         best_work = None
         best_score = 0.0
 
         for work in works:
-            score = _similarity(title, work.title)
+            title_score = _similarity(title, work.title)
+            author_score = _author_overlap(query_authors, work.authors)
+            if query_authors:
+                score = 0.75 * title_score + 0.25 * author_score
+            else:
+                score = title_score
             if score > best_score:
                 best_score = score
                 best_work = work
@@ -364,12 +394,8 @@ class OpenAlexClient:
             doi_candidate = paper.doi or _extract_doi_from_text(paper.url)
             if doi_candidate:
                 work = await self.get_by_doi(doi_candidate)
-
-            if work is None and paper.title:
-                work = await self.find_best_match(paper.title)
-
-            if work is None and paper.url:
-                work = await self.find_best_match(paper.url)
+            elif paper.title:
+                work = await self.find_best_match(paper.title, authors=paper.authors)
 
             if work is None:
                 logger.debug("No OpenAlex match for '%s'", paper.title[:60])
@@ -377,7 +403,9 @@ class OpenAlexClient:
                 extra["openalex_unmatched"] = {
                     "doi": paper.doi or _extract_doi_from_text(paper.url),
                     "title": paper.title,
+                    "authors": paper.authors,
                     "url": paper.url,
+                    "strategy": "doi_only" if doi_candidate else "title_author",
                 }
                 return paper.model_copy(update={"extra": extra})
 

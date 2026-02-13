@@ -101,6 +101,7 @@ class PaperFeedSettings(BaseSettings):
     zotero_library_id: str = ""
     zotero_api_key: str = ""
     zotero_library_type: str = "user"
+    target_collection: Optional[str] = None
 
     # ---- Derived accessors (compatibility with old config functions) ----
 
@@ -159,6 +160,7 @@ class PaperFeedSettings(BaseSettings):
             "library_id": self.zotero_library_id,
             "api_key": self.zotero_api_key,
             "library_type": self.zotero_library_type,
+            "target_collection": self.target_collection,
         }
 
     def get_research_prompt(self) -> Optional[str]:

@@ -710,6 +710,7 @@ class TestOpenAlexClientEnrichPaper:
                 mock_search.return_value = work
 
                 enriched = await client.enrich_paper(paper)
+                mock_search.assert_called_once_with("Original Title", authors=[])
 
                 # Original title should be preserved
                 assert enriched.title == "Original Title"
@@ -745,7 +746,7 @@ class TestOpenAlexClientEnrichPaper:
 
     @pytest.mark.asyncio
     async def test_enrich_paper_title_search_fallback(self):
-        """Test that enrich_paper falls back to title search if DOI fails."""
+        """With DOI present, enrich_paper uses DOI-only strategy (no title fallback)."""
         client = OpenAlexClient(email="test@example.com")
 
         paper = PaperItem(
@@ -769,9 +770,10 @@ class TestOpenAlexClientEnrichPaper:
 
                 enriched = await client.enrich_paper(paper)
 
-                # Should call find_best_match since DOI lookup failed
-                mock_search.assert_called_once_with("Test Paper")
-                assert enriched.abstract == "Found by title"
+                # DOI exists -> no title fallback
+                mock_search.assert_not_called()
+                assert enriched.abstract == ""
+                assert enriched.extra.get("openalex_unmatched") is not None
 
     @pytest.mark.asyncio
     async def test_enrich_paper_stores_openalex_metadata(self):
@@ -802,6 +804,7 @@ class TestOpenAlexClientEnrichPaper:
                 mock_search.return_value = work
 
                 enriched = await client.enrich_paper(paper)
+                mock_search.assert_called_once_with("Test", authors=[])
 
                 assert "openalex" in enriched.extra
                 assert enriched.extra["openalex"]["cited_by_count"] == 42
@@ -835,6 +838,7 @@ class TestOpenAlexClientEnrichPaper:
                 # Should return paper with unmatched info recorded
                 assert enriched.title == paper.title
                 assert enriched.extra.get("openalex_unmatched") is not None
+                mock_search.assert_called_once_with("Unique Title", authors=[])
 
     @pytest.mark.asyncio
     async def test_enrich_paper_published_date_from_year(self):

@@ -1,0 +1,31 @@
+# AGENTS.md
+
+Repository-level collaboration notes for contributors and coding agents.
+
+## Scope
+
+- Applies to the entire repository.
+- Follow existing code style and keep changes minimal and task-focused.
+
+## Configuration and Secrets
+
+- Never commit real API keys or tokens.
+- Keep `.env` local only; use `.env.example` for placeholders.
+- For GitHub Actions, store credentials in repository secrets (not in workflow YAML).
+
+## CLI Workflow Conventions
+
+- Recommended order: `fetch -> filter -> enrich -> export`.
+- Do not export directly from `raw.json` unless intentionally bypassing filtering.
+- For Zotero exports, prefer `TARGET_COLLECTION` or `--collection`.
+
+## Gmail Pipeline Notes
+
+- `GMAIL_SENDER_FILTER` is optional; if set too narrowly, fetch may return `0`.
+- When mailbox has no matching alerts, zero fetched papers is expected behavior.
+
+## Validation
+
+- Run targeted tests for touched areas before finalizing:
+  - `uv run pytest tests/unit/test_cli.py tests/unit/test_config.py`
+  - Add `tests/unit/test_gmail_source.py` when changing Gmail behavior.

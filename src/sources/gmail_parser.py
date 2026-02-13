@@ -6,6 +6,7 @@ from typing import List, Optional
 from bs4 import BeautifulSoup, Tag
 
 from src.models.responses import PaperItem
+from src.utils.dedup import deduplicate_papers
 from src.utils.text import DOI_PATTERN, clean_title
 
 logger = logging.getLogger(__name__)
@@ -49,18 +50,15 @@ class GmailParser:
                 soup, source_name, email_id, email_subject
             )
 
-        # Deduplicate by title
-        seen_titles: set = set()
-        unique_items: List[PaperItem] = []
-        for item in items:
-            title_lower = item.title.lower().strip()
-            if title_lower and title_lower not in seen_titles:
-                seen_titles.add(title_lower)
-                unique_items.append(item)
+        unique_items, dedup_stats = deduplicate_papers(items)
 
         logger.info(
-            f"Extracted {len(unique_items)} items from email "
-            f"{email_id[:8] + '...' if email_id else '(no id)'}"
+            "Extracted %d items from email %s (raw=%d, dropped=%d, by_key=%s)",
+            len(unique_items),
+            email_id[:8] + "..." if email_id else "(no id)",
+            dedup_stats["input_count"],
+            dedup_stats["dropped_count"],
+            dedup_stats["duplicates_by_key"],
         )
         return unique_items
 

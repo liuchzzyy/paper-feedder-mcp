@@ -43,6 +43,7 @@ def reset_dotenv_flag(monkeypatch):
         "ZOTERO_LIBRARY_ID",
         "ZOTERO_API_KEY",
         "ZOTERO_LIBRARY_TYPE",
+        "TARGET_COLLECTION",
         "PAPER_FEEDDER_MCP_OPML",
         "PAPER_FEEDDER_MCP_USER_AGENT",
         "CROSSREF_EMAIL",
@@ -228,6 +229,7 @@ class TestGetZoteroConfig:
             "ZOTERO_LIBRARY_ID": "12345",
             "ZOTERO_API_KEY": "abcdef123456",
             "ZOTERO_LIBRARY_TYPE": "group",
+            "TARGET_COLLECTION": "ABCD1234",
         }
         with mock.patch.dict(os.environ, env_vars):
             with mock.patch("src.config.settings.load_dotenv"):
@@ -235,6 +237,7 @@ class TestGetZoteroConfig:
                 assert config["library_id"] == "12345"
                 assert config["api_key"] == "abcdef123456"
                 assert config["library_type"] == "group"
+                assert config["target_collection"] == "ABCD1234"
 
     def test_get_zotero_config_with_defaults(self):
         """Test Zotero config with defaults when env vars missing."""
@@ -244,6 +247,7 @@ class TestGetZoteroConfig:
                 assert config["library_id"] == ""
                 assert config["api_key"] == ""
                 assert config["library_type"] == "user"  # Default library type
+                assert config["target_collection"] is None
 
 
 class TestGetRssConfig:

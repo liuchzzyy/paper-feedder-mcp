@@ -12,6 +12,7 @@ from typing import Dict, List, Optional
 from src.config.settings import get_gmail_config
 from src.models.responses import PaperItem, PaperSource
 from src.sources.gmail_parser import GmailParser
+from src.utils.dedup import deduplicate_papers
 from src.utils.text import DOI_PATTERN
 
 logger = logging.getLogger(__name__)
@@ -256,6 +257,7 @@ class GmailSource(PaperSource):
 
             for thread in threads:
                 try:
+                    marked_as_read = False
                     snippet = getattr(thread, "snippet", None)
                     if snippet:
                         logger.debug(
@@ -308,6 +310,7 @@ class GmailSource(PaperSource):
 
                     if self.mark_as_read:
                         await asyncio.to_thread(thread.markAsRead)
+                        marked_as_read = True
 
                     if self.processed_label:
                         try:
@@ -324,8 +327,9 @@ class GmailSource(PaperSource):
 
                     if self.trash_after_process:
                         try:
-                            if hasattr(thread, "markAsRead"):
+                            if hasattr(thread, "markAsRead") and not marked_as_read:
                                 await asyncio.to_thread(thread.markAsRead)
+                                marked_as_read = True
                         except Exception as read_err:
                             logger.warning(
                                 f"Failed to mark thread {thread.id} as read before trash: {read_err}"
@@ -357,7 +361,14 @@ class GmailSource(PaperSource):
                 if limit and len(papers) >= limit:
                     break
 
-            papers = self._deduplicate(papers)
+            papers, dedup_stats = deduplicate_papers(papers)
+            logger.info(
+                "Gmail fetch dedup stats: input=%d, unique=%d, dropped=%d, by_key=%s",
+                dedup_stats["input_count"],
+                dedup_stats["unique_count"],
+                dedup_stats["dropped_count"],
+                dedup_stats["duplicates_by_key"],
+            )
 
             logger.info(
                 f"Extracted {len(papers)} unique papers from "
@@ -464,11 +475,5 @@ class GmailSource(PaperSource):
 
     @staticmethod
     def _deduplicate(papers: List[PaperItem]) -> List[PaperItem]:
-        seen: set = set()
-        unique: List[PaperItem] = []
-        for paper in papers:
-            key = paper.title.lower().strip()
-            if key not in seen:
-                seen.add(key)
-                unique.append(paper)
+        unique, _ = deduplicate_papers(papers)
         return unique

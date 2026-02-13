@@ -3,7 +3,9 @@
 import json
 import pytest
 from datetime import date
+from unittest.mock import AsyncMock
 
+import src.adapters.zotero as zotero_module
 from src.adapters.json import JSONAdapter
 from src.adapters.zotero import ZoteroAdapter, zotero_available
 from src.models.responses import PaperItem
@@ -237,3 +239,123 @@ class TestZoteroAdapter:
                         )
                     ],
                 )
+
+    @pytest.mark.asyncio
+    async def test_zotero_export_skips_existing_by_doi(self, monkeypatch):
+        """Export skips items that already exist in library by DOI."""
+        monkeypatch.setattr(zotero_module, "zotero_available", True)
+
+        adapter = ZoteroAdapter.__new__(ZoteroAdapter)
+        adapter._item_service = AsyncMock()
+        adapter._api_client = AsyncMock()
+        adapter._item_service.list_items = AsyncMock(
+            return_value=[
+                {
+                    "data": {
+                        "title": "Existing Paper",
+                        "DOI": "10.1234/existing",
+                        "date": "2024-01-01",
+                        "creators": [{"name": "Author One"}],
+                    }
+                }
+            ]
+        )
+        adapter._item_service.create_item = AsyncMock()
+        adapter._logger = zotero_module.logging.getLogger("test.zotero")
+
+        papers = [
+            PaperItem(
+                title="Existing Paper title variant",
+                doi="https://doi.org/10.1234/EXISTING",
+                source="Test",
+                source_type="rss",
+            ),
+            PaperItem(
+                title="Brand New Paper",
+                doi="10.9999/new",
+                source="Test",
+                source_type="rss",
+            ),
+        ]
+
+        result = await adapter.export(papers)
+
+        assert result["success_count"] == 1
+        assert result["skipped_count"] == 1
+        assert result["skipped_by_key"]["doi"] == 1
+        adapter._item_service.create_item.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_zotero_export_skips_existing_by_title_year_author(self, monkeypatch):
+        """When DOI is missing, export falls back to title+year+first_author."""
+        monkeypatch.setattr(zotero_module, "zotero_available", True)
+
+        adapter = ZoteroAdapter.__new__(ZoteroAdapter)
+        adapter._item_service = AsyncMock()
+        adapter._api_client = AsyncMock()
+        adapter._item_service.get_items = AsyncMock(
+            return_value=[
+                {
+                    "data": {
+                        "title": "A New Framework for Batteries",
+                        "date": "2025-03-08",
+                        "creators": [{"lastName": "Wang"}],
+                    }
+                }
+            ]
+        )
+        adapter._item_service.create_item = AsyncMock()
+        adapter._logger = zotero_module.logging.getLogger("test.zotero")
+
+        papers = [
+            PaperItem(
+                title="A New Framework for Batteries",
+                authors=["Wang"],
+                published_date=date(2025, 3, 8),
+                source="Test",
+                source_type="rss",
+            ),
+            PaperItem(
+                title="Another Fresh Paper",
+                authors=["Wang"],
+                published_date=date(2025, 3, 8),
+                source="Test",
+                source_type="rss",
+            ),
+        ]
+
+        result = await adapter.export(papers)
+
+        assert result["success_count"] == 1
+        assert result["skipped_count"] == 1
+        assert result["skipped_by_key"]["title_year_author"] == 1
+        adapter._item_service.create_item.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_zotero_export_counts_runtime_skipped_duplicates(self, monkeypatch):
+        """create_item summary with skipped_duplicates should update skipped_count."""
+        monkeypatch.setattr(zotero_module, "zotero_available", True)
+
+        adapter = ZoteroAdapter.__new__(ZoteroAdapter)
+        adapter._item_service = AsyncMock()
+        adapter._api_client = AsyncMock()
+        adapter._item_service.list_items = AsyncMock(return_value=[])
+        adapter._item_service.create_item = AsyncMock(
+            return_value={"created": [], "failed": [], "skipped_duplicates": [{}]}
+        )
+        adapter._logger = zotero_module.logging.getLogger("test.zotero")
+
+        papers = [
+            PaperItem(
+                title="Duplicate In Runtime Check",
+                doi="10.7777/dup",
+                source="Test",
+                source_type="rss",
+            )
+        ]
+
+        result = await adapter.export(papers)
+
+        assert result["success_count"] == 0
+        assert result["skipped_count"] == 1
+        assert result["skipped_by_key"]["doi"] == 1
