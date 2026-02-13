@@ -37,6 +37,7 @@ jobs:
       ZOTERO_LIBRARY_ID: ${{ secrets.ZOTERO_LIBRARY_ID }}
       ZOTERO_API_KEY: ${{ secrets.ZOTERO_API_KEY }}
       ZOTERO_LIBRARY_TYPE: user
+      TARGET_COLLECTION: ${{ secrets.TARGET_COLLECTION }}
 
     steps:
       - name: Checkout
@@ -78,14 +79,25 @@ jobs:
         run: |
           START_TIME=$(date +%s)
           uv run paper-feedder-mcp fetch --source rss --since "$SINCE_DATE" --output output/rss_raw.json
-          uv run paper-feedder-mcp filter --input output/rss_raw.json --output output/rss_filtered.json
-          uv run paper-feedder-mcp filter --input output/rss_filtered.json --output output/rss_ai_filtered.json --ai
-          uv run paper-feedder-mcp enrich --input output/rss_ai_filtered.json --output output/rss_enriched.json --source all --concurrency 5
-          uv run paper-feedder-mcp export --input output/rss_enriched.json --output "output/${RUN_DATE}_RSS_ZOTERO.json" --format zotero
+          RSS_RAW=$(python3 -c "import json; print(len(json.load(open('output/rss_raw.json'))))" 2>/dev/null || echo "0")
+
+          if [ "$RSS_RAW" -gt 0 ]; then
+            uv run paper-feedder-mcp filter --input output/rss_raw.json --output output/rss_filtered.json --no-ai
+            uv run paper-feedder-mcp filter --input output/rss_filtered.json --output output/rss_ai_filtered.json --ai
+            uv run paper-feedder-mcp enrich --input output/rss_ai_filtered.json --output output/rss_enriched.json --source all --concurrency 5
+            if [ -n "${TARGET_COLLECTION}" ]; then
+              uv run paper-feedder-mcp export --input output/rss_enriched.json --output "output/${RUN_DATE}_RSS_ZOTERO.json" --format zotero --collection "${TARGET_COLLECTION}"
+            else
+              uv run paper-feedder-mcp export --input output/rss_enriched.json --output "output/${RUN_DATE}_RSS_ZOTERO.json" --format zotero
+            fi
+          else
+            echo "No RSS papers fetched. Skipping filter/enrich/export."
+            echo "[]" > output/rss_ai_filtered.json
+            echo "[]" > output/rss_enriched.json
+          fi
           END_TIME=$(date +%s)
 
           # Extract counts from output files
-          RSS_RAW=$(python3 -c "import json; print(len(json.load(open('output/rss_raw.json'))))" 2>/dev/null || echo "0")
           RSS_FILTERED=$(python3 -c "import json; print(len(json.load(open('output/rss_ai_filtered.json'))))" 2>/dev/null || echo "0")
           RSS_ENRICHED=$(python3 -c "import json; print(len(json.load(open('output/rss_enriched.json'))))" 2>/dev/null || echo "0")
 
@@ -101,14 +113,25 @@ jobs:
         run: |
           START_TIME=$(date +%s)
           uv run paper-feedder-mcp fetch --source gmail --since "$SINCE_DATE" --output output/gmail_raw.json
-          uv run paper-feedder-mcp filter --input output/gmail_raw.json --output output/gmail_filtered.json
-          uv run paper-feedder-mcp filter --input output/gmail_filtered.json --output output/gmail_ai_filtered.json --ai
-          uv run paper-feedder-mcp enrich --input output/gmail_ai_filtered.json --output output/gmail_enriched.json --source all --concurrency 5
-          uv run paper-feedder-mcp export --input output/gmail_enriched.json --output "output/${RUN_DATE}_GMAIL_ZOTERO.json" --format zotero
+          GMAIL_RAW=$(python3 -c "import json; print(len(json.load(open('output/gmail_raw.json'))))" 2>/dev/null || echo "0")
+
+          if [ "$GMAIL_RAW" -gt 0 ]; then
+            uv run paper-feedder-mcp filter --input output/gmail_raw.json --output output/gmail_filtered.json --no-ai
+            uv run paper-feedder-mcp filter --input output/gmail_filtered.json --output output/gmail_ai_filtered.json --ai
+            uv run paper-feedder-mcp enrich --input output/gmail_ai_filtered.json --output output/gmail_enriched.json --source all --concurrency 5
+            if [ -n "${TARGET_COLLECTION}" ]; then
+              uv run paper-feedder-mcp export --input output/gmail_enriched.json --output "output/${RUN_DATE}_GMAIL_ZOTERO.json" --format zotero --collection "${TARGET_COLLECTION}"
+            else
+              uv run paper-feedder-mcp export --input output/gmail_enriched.json --output "output/${RUN_DATE}_GMAIL_ZOTERO.json" --format zotero
+            fi
+          else
+            echo "No Gmail papers fetched. Skipping filter/enrich/export."
+            echo "[]" > output/gmail_ai_filtered.json
+            echo "[]" > output/gmail_enriched.json
+          fi
           END_TIME=$(date +%s)
 
           # Extract counts from output files
-          GMAIL_RAW=$(python3 -c "import json; print(len(json.load(open('output/gmail_raw.json'))))" 2>/dev/null || echo "0")
           GMAIL_FILTERED=$(python3 -c "import json; print(len(json.load(open('output/gmail_ai_filtered.json'))))" 2>/dev/null || echo "0")
           GMAIL_ENRICHED=$(python3 -c "import json; print(len(json.load(open('output/gmail_enriched.json'))))" 2>/dev/null || echo "0")
 
