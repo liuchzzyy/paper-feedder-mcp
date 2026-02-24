@@ -15,7 +15,7 @@ class JSONAdapter(ExportAdapter):
     async def export(
         self,
         papers: List[PaperItem],
-        filepath: str = "papers.json",
+        filepath: str = "exported_papers.json",
         include_metadata: bool = True,
         **kwargs: Any,
     ) -> Dict[str, Any]:

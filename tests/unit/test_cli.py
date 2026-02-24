@@ -108,7 +108,7 @@ class TestBuildParser:
         args = parser.parse_args(["fetch"])
 
         assert hasattr(args, "output")
-        assert Path(args.output) == Path("output") / date.today().isoformat() / "raw.json"
+        assert Path(args.output) == Path("output") / date.today().isoformat() / "fetched_papers.json"
         assert args.source == "rss"  # default
         assert args.since is not None
 
@@ -148,7 +148,7 @@ class TestBuildParser:
         )
 
         assert args.input == "in.json"
-        assert Path(args.output) == Path("output") / date.today().isoformat() / "filtered.json"
+        assert Path(args.output) == Path("output") / date.today().isoformat() / "filtered_papers.json"
 
     def test_filter_parser_accepts_filter_args(self):
         """Test filter parser accepts keyword filters."""
@@ -179,7 +179,7 @@ class TestBuildParser:
         assert args.authors == ["Author"]
         assert args.min_date == "2024-01-01"
         assert args.has_pdf is True
-        assert args.ai is False
+        assert args.semantic_filter is False
 
     def test_export_parser_has_expected_defaults(self):
         """Test export subcommand defaults."""
@@ -213,7 +213,7 @@ class TestBuildParser:
             ]
         )
 
-        assert Path(args.output) == Path("output") / date.today().isoformat() / "export.json"
+        assert Path(args.output) == Path("output") / date.today().isoformat() / "exported_papers.json"
         assert args.format == "zotero"
 
     def test_export_parser_accepts_format_options(self):
@@ -252,7 +252,7 @@ class TestBuildParser:
         )
 
         assert args.input == "in.json"
-        assert Path(args.output) == Path("output") / date.today().isoformat() / "enriched.json"
+        assert Path(args.output) == Path("output") / date.today().isoformat() / "enriched_papers.json"
         assert args.source == "all"  # default
         assert args.concurrency == 5  # default
 
@@ -555,7 +555,7 @@ class TestHandleFilter:
             authors=None,
             min_date=None,
             has_pdf=False,
-            ai=True,
+            semantic_filter=True,
         )
 
         with patch(
@@ -594,7 +594,7 @@ class TestHandleFilter:
             authors=None,
             min_date=None,
             has_pdf=False,
-            ai=True,
+            semantic_filter=True,
         )
 
         with patch("src.filters.pipeline.FilterPipeline") as mock_pipeline_class:
@@ -629,7 +629,7 @@ class TestHandleFilter:
             authors=None,
             min_date=None,
             has_pdf=False,
-            ai=False,
+            semantic_filter=False,
         )
 
         with patch(
@@ -654,7 +654,7 @@ class TestHandleFilter:
             authors=None,
             min_date="2024-01-01",
             has_pdf=False,
-            ai=True,
+            semantic_filter=True,
         )
 
         with patch("src.filters.pipeline.FilterPipeline") as mock_pipeline_class:
@@ -688,7 +688,7 @@ class TestHandleFilter:
             authors=["Author"],
             min_date="2024-01-01",
             has_pdf=True,
-            ai=True,
+            semantic_filter=True,
         )
 
         with patch("src.filters.pipeline.FilterPipeline") as mock_pipeline_class:
@@ -728,7 +728,7 @@ class TestHandleFilter:
             authors=None,
             min_date=None,
             has_pdf=False,
-            ai=True,
+            semantic_filter=True,
         )
 
         with patch("src.client.cli.get_openai_config") as mock_config:
@@ -767,7 +767,7 @@ class TestHandleFilter:
             authors=None,
             min_date=None,
             has_pdf=False,
-            ai=False,
+            semantic_filter=False,
         )
 
         with pytest.raises(SystemExit) as exc_info:
@@ -1211,7 +1211,7 @@ class TestIntegration:
             authors=None,
             min_date=None,
             has_pdf=False,
-            ai=False,
+            semantic_filter=False,
         )
 
         with patch("src.filters.pipeline.FilterPipeline") as mock_pipeline_class:

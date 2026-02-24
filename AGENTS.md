@@ -16,7 +16,7 @@ Repository-level collaboration notes for contributors and coding agents.
 ## CLI Workflow Conventions
 
 - Recommended order: `fetch -> filter -> enrich -> export`.
-- Do not export directly from `raw.json` unless intentionally bypassing filtering.
+- Do not export directly from fetched input (`fetched_papers.json` / legacy `raw.json`) unless intentionally bypassing filtering.
 - For Zotero exports, prefer `TARGET_COLLECTION` or `--collection`.
 
 ## Gmail Pipeline Notes

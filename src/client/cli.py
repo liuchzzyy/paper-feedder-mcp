@@ -20,6 +20,11 @@ from src.server import serve
 
 logger = logging.getLogger(__name__)
 
+FETCH_OUTPUT_FILENAME = "fetched_papers.json"
+FILTER_OUTPUT_FILENAME = "filtered_papers.json"
+ENRICH_OUTPUT_FILENAME = "enriched_papers.json"
+EXPORT_OUTPUT_FILENAME = "exported_papers.json"
+
 
 # -------------------- Helpers --------------------
 
@@ -87,8 +92,8 @@ def _add_output_arg(
     )
 
 
-def _build_llm_client(enable_ai: bool):
-    if not enable_ai:
+def _build_llm_client(enable_semantic_filter: bool):
+    if not enable_semantic_filter:
         return None
 
     from openai import OpenAI
@@ -97,8 +102,8 @@ def _build_llm_client(enable_ai: bool):
     api_key = config.get("api_key")
     if not api_key:
         print(
-            "Warning: AI filtering enabled but OPENAI_API_KEY not set. "
-            "Skipping AI filter.",
+            "Warning: semantic filtering enabled but OPENAI_API_KEY not set. "
+            "Skipping semantic filter.",
             file=sys.stderr,
         )
         return None
@@ -185,7 +190,10 @@ async def _handle_filter(args: argparse.Namespace) -> None:
         has_pdf=args.has_pdf,
     )
 
-    llm_client = _build_llm_client(args.ai)
+    use_semantic_filter = getattr(
+        args, "semantic_filter", getattr(args, "ai", True)
+    )
+    llm_client = _build_llm_client(use_semantic_filter)
 
     pipeline = FilterPipeline(llm_client=llm_client)
     result: FilterResult = await pipeline.filter(papers, criteria)
@@ -201,9 +209,9 @@ async def _handle_filter(args: argparse.Namespace) -> None:
 async def _handle_export(args: argparse.Namespace) -> None:
     papers = _load_papers(args.input)
     input_name = Path(args.input).name.lower()
-    if input_name == "raw.json":
+    if input_name in {"raw.json", FETCH_OUTPUT_FILENAME}:
         print(
-            "Warning: exporting from raw.json means filter step was not applied.",
+            "Warning: exporting from fetched/raw input means filter step was not applied.",
             file=sys.stderr,
         )
 
@@ -320,10 +328,14 @@ def _delete_output_dir(output_dir: str) -> None:
 
     # Clean up common intermediate files in cwd (if they exist outside output/)
     intermediate_files = [
-        "raw.json",
-        "filtered.json",
-        "enriched.json",
-        "export.json",
+        "raw.json",  # backward compatibility
+        "filtered.json",  # backward compatibility
+        "enriched.json",  # backward compatibility
+        "export.json",  # backward compatibility
+        FETCH_OUTPUT_FILENAME,
+        FILTER_OUTPUT_FILENAME,
+        ENRICH_OUTPUT_FILENAME,
+        EXPORT_OUTPUT_FILENAME,
         "gmail.json",
         "zotero.json",
     ]
@@ -400,8 +412,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     _add_output_arg(
         fetch_parser,
-        "raw.json",
-        "输出 JSON 文件路径（默认：output/YYYY-MM-DD/raw.json）",
+        FETCH_OUTPUT_FILENAME,
+        "输出 JSON 文件路径（默认：output/YYYY-MM-DD/fetched_papers.json）",
     )
 
     filter_parser = subparsers.add_parser(
@@ -410,8 +422,8 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_input_arg(filter_parser)
     _add_output_arg(
         filter_parser,
-        "filtered.json",
-        "输出 JSON 文件路径（默认：output/YYYY-MM-DD/filtered.json）",
+        FILTER_OUTPUT_FILENAME,
+        "输出 JSON 文件路径（默认：output/YYYY-MM-DD/filtered_papers.json）",
     )
     filter_parser.add_argument(
         "-k",
@@ -448,21 +460,25 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="仅保留有 PDF 的论文",
     )
-    ai_group = filter_parser.add_mutually_exclusive_group()
-    ai_group.add_argument(
-        "--ai",
+    semantic_filter_group = filter_parser.add_mutually_exclusive_group()
+    semantic_filter_group.add_argument(
+        "--semantic-filter",
         "--semantic",
-        "--use-ai",
-        dest="ai",
+        "--use-semantic-filter",
+        "--ai",  # backward compatibility
+        "--use-ai",  # backward compatibility
+        dest="semantic_filter",
         action="store_true",
         default=True,
-        help="启用 AI 语义过滤（默认开启）",
+        help="启用语义过滤（默认开启，等价于旧参数 --ai）",
     )
-    ai_group.add_argument(
-        "--no-ai",
-        dest="ai",
+    semantic_filter_group.add_argument(
+        "--no-semantic-filter",
+        "--disable-semantic-filter",
+        "--no-ai",  # backward compatibility
+        dest="semantic_filter",
         action="store_false",
-        help="禁用 AI 语义过滤",
+        help="禁用语义过滤（等价于旧参数 --no-ai）",
     )
 
     export_parser = subparsers.add_parser(
@@ -478,8 +494,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     _add_output_arg(
         export_parser,
-        "export.json",
-        "输出文件路径（默认：output/YYYY-MM-DD/export.json）",
+        EXPORT_OUTPUT_FILENAME,
+        "输出文件路径（默认：output/YYYY-MM-DD/exported_papers.json）",
     )
     export_parser.add_argument(
         "--collection",
@@ -512,8 +528,8 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_input_arg(enrich_parser)
     _add_output_arg(
         enrich_parser,
-        "enriched.json",
-        "输出 JSON 文件路径（默认：output/YYYY-MM-DD/enriched.json）",
+        ENRICH_OUTPUT_FILENAME,
+        "输出 JSON 文件路径（默认：output/YYYY-MM-DD/enriched_papers.json）",
     )
     enrich_parser.add_argument(
         "--api",

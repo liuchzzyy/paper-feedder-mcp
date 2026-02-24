@@ -73,21 +73,21 @@ On errors:
 
 ```bash
 # 1. Fetch papers from RSS feeds (default --since: last 15 days)
-feedder-mcp fetch --source rss --limit 200 --output output/raw.json
+feedder-mcp fetch --source rss --limit 200 --output output/fetched_papers.json
 
 # 2. Keyword filter (OR logic)
-feedder-mcp filter --input output/raw.json --output output/filtered.json \
+feedder-mcp filter --input output/fetched_papers.json --output output/filtered_papers.json \
     --keywords battery zinc electrolyte operando
 
-# 3. AI semantic filter (default enabled; requires OPENAI_API_KEY in .env)
-feedder-mcp filter --input output/filtered.json --output output/ai_filtered.json \
+# 3. Semantic filter (default enabled; requires OPENAI_API_KEY in .env)
+feedder-mcp filter --input output/filtered_papers.json --output output/semantic_filtered_papers.json \
     --keywords battery zinc
 
 # 4. Enrich with CrossRef + OpenAlex metadata
-feedder-mcp enrich --input output/ai_filtered.json --output output/enriched.json --api all --concurrency 5
+feedder-mcp enrich --input output/semantic_filtered_papers.json --output output/enriched_papers.json --api all --concurrency 5
 
 # 5. Export (metadata included by default)
-feedder-mcp export --input output/enriched.json --output output/final.json --format json
+feedder-mcp export --input output/enriched_papers.json --output output/exported_papers.json --format json
 
 # 6. Optional cleanup
 feedder-mcp delete
@@ -95,7 +95,7 @@ feedder-mcp delete
 
 Notes:
 - Use `feedder-mcp delete` to clean `output/` and common intermediate files when needed.
-- Use `--no-ai` to disable AI filtering; use `--no-metadata` to omit extra fields in export.
+- Use `--no-semantic-filter` (or old alias `--no-ai`) to disable semantic filtering; use `--no-metadata` to omit extra fields in export.
 - If `--keywords` is omitted, keywords will be auto-generated from `RESEARCH_PROMPT` using the AI keyword generator.
 - If keyword auto-generation fails and returns empty keywords, `filter` now exits with an error instead of silently passing all papers.
 - If OpenAlex returns `429`, set `OPENALEX_API_KEY`, lower `OPENALEX_MAX_REQUESTS_PER_SECOND`, and consider reducing `--concurrency`.
@@ -117,7 +117,7 @@ async def main():
     criteria = FilterCriteria(keywords=["battery", "electrode"])
     result = await FilterPipeline().filter(papers, criteria)
 
-    await JSONAdapter().export(result.papers, "output/papers.json", include_metadata=True)
+    await JSONAdapter().export(result.papers, "output/exported_papers.json", include_metadata=True)
 
 asyncio.run(main())
 ```
@@ -164,8 +164,8 @@ Workflow: `.github/workflows/RSS+GMAIL.yml`
   - Scheduled daily run
   - Manual run (`workflow_dispatch`)
 - Pipeline:
-  - RSS: `fetch -> filter(--no-ai) -> filter(--ai) -> enrich -> export`
-  - Gmail: `fetch -> filter(--no-ai) -> filter(--ai) -> enrich -> export`
+  - RSS: `fetch -> filter(--no-semantic-filter) -> filter(--semantic-filter) -> enrich -> export`
+  - Gmail: `fetch -> filter(--no-semantic-filter) -> filter(--semantic-filter) -> enrich -> export`
 - Behavior:
   - If fetched count is `0`, downstream steps are skipped safely for that source.
   - If `TARGET_COLLECTION` is set, Zotero export writes into that collection.
